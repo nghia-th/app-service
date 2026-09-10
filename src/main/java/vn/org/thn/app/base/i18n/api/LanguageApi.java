@@ -60,11 +60,11 @@ public class LanguageApi extends BaseCtl {
 
     /** All translation rows, one per langKey, optionally filtered to those whose key or value contains {@code keyword}. */
     @Operation(
-            summary = "List language",
-            description = "List language"
+            summary = "List language translations",
+            description = "Get list of all translation keys with values for each language, optionally filtered by keyword"
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "List ")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully retrieved translation list")
     })
     @GetMapping("/list")
     public ResponseEntity<ApiResponse<List<Map<String, String>>>> list(
@@ -73,6 +73,14 @@ public class LanguageApi extends BaseCtl {
     }
 
     /** Adds a new translation key or updates an existing one's per-language values. */
+    @Operation(
+            summary = "Add or update translation key",
+            description = "Add a new translation key or update existing values for specified language codes"
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully saved translation"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed (blank langKey or invalid language code)")
+    })
     @RequestMapping(method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<Void>> addOrUpdate(@RequestBody LanguageRequest request) {
         if (request.getLangKey() == null || request.getLangKey().isBlank()) {
@@ -88,6 +96,13 @@ public class LanguageApi extends BaseCtl {
     }
 
     /** Deletes one translation key (across every language). Body is the raw langKey as a JSON string. */
+    @Operation(
+            summary = "Delete translation key",
+            description = "Delete one translation key across all languages"
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully deleted translation key")
+    })
     @DeleteMapping
     public ResponseEntity<ApiResponse<Void>> delete(@RequestBody String langKey) {
         languageService.deleteLanguage(langKey);
@@ -95,6 +110,13 @@ public class LanguageApi extends BaseCtl {
     }
 
     /** Deletes several translation keys at once. Body is a JSON array of langKeys. */
+    @Operation(
+            summary = "Delete multiple translation keys",
+            description = "Delete a list of translation keys across all languages"
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully deleted translation keys")
+    })
     @DeleteMapping("/deletes")
     public ResponseEntity<ApiResponse<Void>> deletes(@RequestBody List<String> langKeys) {
         langKeys.forEach(languageService::deleteLanguage);
@@ -102,18 +124,40 @@ public class LanguageApi extends BaseCtl {
     }
 
     /** All translations for one language, keyed by langKey. */
+    @Operation(
+            summary = "Get translations for a single language",
+            description = "Get map of key-value translations for a specific language code (e.g., 'vi', 'en')"
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully retrieved language translations")
+    })
     @GetMapping("/{lang}")
     public ResponseEntity<ApiResponse<Map<String, String>>> lang(@PathVariable("lang") String lang) {
         return ok(language.getValues().get(lang));
     }
 
     /** Every language's translations at once, keyed by language code then langKey. */
+    @Operation(
+            summary = "Get all language translations",
+            description = "Get nested map of all language codes to their key-value translations"
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully retrieved all translations")
+    })
     @GetMapping
     public ResponseEntity<ApiResponse<Map<String, Map<String, String>>>> langAll() {
         return ok(language.getValues());
     }
 
     /** Streams every "lang/*.json" file as a single "lang.zip" download; 404 if the lang/ folder doesn't exist. */
+    @Operation(
+            summary = "Export translation JSON files as ZIP",
+            description = "Download a zip archive containing all JSON translation files from the lang directory"
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully generated zip archive"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Language directory not found")
+    })
     @PostMapping("/export")
     public void export(HttpServletResponse response) throws IOException {
         Path langDir = Path.of(LanguageAutoConfiguration.currentPath() + "lang");
