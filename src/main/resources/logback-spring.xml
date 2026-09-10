@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="30 seconds">
+
+    <!-- Lấy thông tin từ application.yml -->
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="desktop"/>
+    <springProperty scope="context" name="logPath" source="logging.file.path" defaultValue="logs"/>
+
+    <!-- Pattern chuẩn -->
+    <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [${appName}] %-5level [%X{requestId:-}] %logger{36} - %msg%n"/>
+
+    <!-- Console appender -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- File tổng hợp: từ INFO trở lên (INFO/WARN/ERROR), chỉ lưu file có ngày/tháng -->
+    <appender name="INFO_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${logPath}/info_%d{yyyy-MM-dd}_%i.log</fileNamePattern>
+            <maxFileSize>5MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>100MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+    </appender>
+
+    <!-- File riêng cho ERROR trở lên, để dễ rà soát/alert - log ERROR sẽ xuất hiện cả ở info_*.log lẫn error_*.log -->
+    <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${logPath}/error_%d{yyyy-MM-dd}_%i.log</fileNamePattern>
+            <maxFileSize>5MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>100MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>ERROR</level>
+        </filter>
+    </appender>
+
+    <!-- Root logger -->
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+        <appender-ref ref="INFO_FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+    </root>
+
+    <!-- Profile: DEV -->
+    <springProfile name="dev">
+        <logger name="org.springframework" level="DEBUG"/>
+        <logger name="vn.org" level="DEBUG"/>
+    </springProfile>
+
+    <!-- Profile: PROD -->
+    <springProfile name="prod">
+        <logger name="org.springframework" level="WARN"/>
+        <logger name="vn.org" level="INFO"/>
+    </springProfile>
+
+</configuration>
