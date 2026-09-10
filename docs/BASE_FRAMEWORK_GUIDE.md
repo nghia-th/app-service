@@ -20,8 +20,11 @@ Tài liệu này cung cấp đầy đủ hướng dẫn kiến trúc, quy tắc 
    - [3.2 Chuẩn Hóa Response `ApiResponse<T>`](#32-chuẩn-hóa-response-apiresponset)
    - [3.3 Xử Lý Lỗi Ngoại Lệ (BusinessException & GlobalExceptionHandler)](#33-xử-lý-lỗi-ngoại-lệ-businessexception--globalexceptionhandler)
 4. [Phân Hệ Đa Ngôn Ngữ i18n](#4-phân-hệ-đa-ngôn-ngữ-i18n)
-5. [Cấu Hình Đa CSDL (Database Configuration)](#5-cấu-hình-đa-csdl-database-configuration)
-6. [Mẫu Hướng Dẫn Phát Triển Tính Năng Mới (Recipe for AI Agent)](#6-mẫu-hướng-dẫn-phát-triển-tính-năng-mới-recipe-for-ai-agent)
+5. [Cấu Hình Đa CSDL & Flyway Migration](#5-cấu-hình-đa-csdl--flyway-migration)
+6. [Quản Lý Giao Dịch Transaction Management](#6-quản-lý-giao-dịch-transaction-management)
+7. [Hướng Dẫn Viết Unit Test](#7-hướng-dẫn-viết-unit-test)
+8. [Swagger UI & Cấu Hình Bí Mật (Secrets)](#8-swagger-ui--cấu-hình-bí-mật-secrets)
+9. [Mẫu Hướng Dẫn Phát Triển Tính Năng Mới (Recipe for AI Agent)](#9-mẫu-hướng-dẫn-phát-triển-tính-năng-mới-recipe-for-ai-agent)
 
 ---
 
@@ -48,7 +51,7 @@ vn.org.thn.app.base
 Entity đại diện cho 1 bảng trong CSDL. Sử dụng các annotation thuộc package `vn.org.thn.app.base.persistence.annotation.*`:
 
 ```java
-package vn.org.thn.app.demo.domain;
+package vn.org.thn.app.modules.product.domain.entity;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -93,11 +96,11 @@ public class Product extends BaseEntity {
 Mọi Repository quản lý Entity phải kế thừa `BaseRepositoryImpl<T, ID>` và gắn `@Repository`:
 
 ```java
-package vn.org.thn.app.demo.infrastructure;
+package vn.org.thn.app.modules.product.infrastructure;
 
 import org.springframework.stereotype.Repository;
 import vn.org.thn.app.base.persistence.repository.BaseRepositoryImpl;
-import vn.org.thn.app.demo.domain.Product;
+import vn.org.thn.app.modules.product.domain.entity.Product;
 
 @Repository
 public class ProductRepository extends BaseRepositoryImpl<Product, Long> {
@@ -230,7 +233,11 @@ int deletedCount = productRepository.delete()
 ---
 
 ### 2.7 Native Query & MyBatis Mapper
-Trong trường hợp cần viết câu SQL phức tạp hoặc JOIN nhiều bảng:
+
+Khi cần thực thi các câu lệnh SQL phức tạp (JOIN nhiều bảng, báo cáo, thống kê, hoặc SQL động nâng cao), Framework hỗ trợ 2 cách tiếp cận:
+
+#### Cách 1: Sử dụng `nativeQuery(...)` trực tiếp trong Repository
+Phù hợp cho các câu truy vấn SQL ngắn hoặc trung bình:
 
 ```java
 @Repository
@@ -246,6 +253,70 @@ public class ProductRepository extends BaseRepositoryImpl<Product, Long> {
 }
 ```
 
+#### Cách 2: Sử dụng Custom MyBatis XML Mapper (Quy trình 3 Bước)
+Phù hợp cho các câu SQL rất dài, báo cáo phức tạp, hoặc sử dụng tính năng MyBatis Dynamic SQL XML (như `<if>`, `<choose>`, `<foreach>`).
+
+*Lưu ý: Thư mục `mapper/` ở root dự án đã được cấu hình tự động nạp qua `mybatis.mapper-locations: file:./mapper/*.xml`.*
+
+- **Bước 1: Tạo file XML Mapper trong thư mục `mapper/`** (ví dụ: `mapper/UserCustomMapper.xml`):
+  ```xml
+  <?xml version="1.0" encoding="UTF-8" ?>
+  <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+          "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+  <mapper namespace="vn.org.thn.app.modules.user.infrastructure.mapper.UserCustomMapper">
+
+      <select id="findUserReport" resultType="vn.org.thn.app.modules.user.api.dto.UserReportDTO">
+          SELECT u.id, u.username, u.email, COUNT(o.id) AS totalOrders
+          FROM tbl_user u
+          LEFT JOIN tbl_order o ON u.id = o.user_id
+          <where>
+              <if test="status != null and status != ''">
+                  AND u.status = #{status}
+              </if>
+          </where>
+          GROUP BY u.id, u.username, u.email
+          ORDER BY totalOrders DESC
+      </select>
+
+  </mapper>
+  ```
+
+- **Bước 2: Tạo Java Mapper Interface với annotation `@Mapper`** (đặt trong package `infrastructure` của module):
+  ```java
+  package vn.org.thn.app.modules.user.infrastructure.mapper;
+
+  import org.apache.ibatis.annotations.Mapper;
+  import org.apache.ibatis.annotations.Param;
+  import vn.org.thn.app.modules.user.api.dto.UserReportDTO;
+  import java.util.List;
+
+  @Mapper
+  public interface UserCustomMapper {
+      List<UserReportDTO> findUserReport(@Param("status") String status);
+  }
+  ```
+
+- **Bước 3: Gọi Custom Mapper từ Repository** qua helper method `mapper(...)` kế thừa từ `BaseRepositoryImpl`:
+  ```java
+  package vn.org.thn.app.modules.user.infrastructure;
+
+  import org.springframework.stereotype.Repository;
+  import vn.org.thn.app.base.persistence.repository.BaseRepositoryImpl;
+  import vn.org.thn.app.modules.user.domain.entity.UserEntity;
+  import vn.org.thn.app.modules.user.infrastructure.mapper.UserCustomMapper;
+  import vn.org.thn.app.modules.user.api.dto.UserReportDTO;
+  import java.util.List;
+
+  @Repository
+  public class UserRepository extends BaseRepositoryImpl<UserEntity, Long> {
+
+      public List<UserReportDTO> getUserReport(String status) {
+          // Gọi custom MyBatis mapper thông qua helper method mapper()
+          return mapper(UserCustomMapper.class).findUserReport(status);
+      }
+  }
+  ```
+
 ---
 
 ## 3. Phân Hệ Web Core & Controller
@@ -254,7 +325,7 @@ public class ProductRepository extends BaseRepositoryImpl<Product, Long> {
 Mọi REST Controller nên kế thừa `BaseCtl` để sử dụng các helper response:
 
 ```java
-package vn.org.thn.app.demo.api;
+package vn.org.thn.app.modules.product.api;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -264,8 +335,8 @@ import org.springframework.web.bind.annotation.*;
 import vn.org.thn.app.base.core.dto.page.PageResponse;
 import vn.org.thn.app.base.core.response.ApiResponse;
 import vn.org.thn.app.base.web.controller.BaseCtl;
-import vn.org.thn.app.demo.domain.Product;
-import vn.org.thn.app.demo.infrastructure.ProductRepository;
+import vn.org.thn.app.modules.product.domain.entity.Product;
+import vn.org.thn.app.modules.product.infrastructure.ProductRepository;
 
 @Tag(name = "Product Management API")
 @RestController
@@ -328,8 +399,9 @@ Dự án có sẵn service quản lý dịch đa ngôn ngữ đồng bộ giữa
 
 ---
 
-## 5. Cấu Hình Đa CSDL (Database Configuration)
+## 5. Cấu Hình Đa CSDL & Flyway Migration
 
+### 5.1 Cấu Hình Database trong `application.yaml`
 Cấu hình trong file [application.yaml](file:///Volumes/Data/04.MyProject/java-project/app-service/src/main/resources/application.yaml):
 
 ```yaml
@@ -340,12 +412,107 @@ base:
     sql-log: BASIC            # Log SQL: OFF / BASIC / FULL
 ```
 
+### 5.2 Quy Trình Quản Lý Script Migration (Flyway)
+Mọi thay đổi cấu trúc CSDL (tạo bảng, thêm cột, index) đều được tự động thực thi bởi Flyway khi ứng dụng khởi chạy (`DatabaseInitializer`).
+
+- **Thư mục lưu trữ**: Đặt trong `database/<db_type>/` (Ví dụ: `database/sqlite/`, `database/postgresql/`, `database/mysql/`).
+- **Quy tắc đặt tên file**: `V<Version>__<Mo_Ta_Cau_Truc>.sql` (chú ý **2 dấu gạch dưới `__`**).
+- **Ví dụ**:
+  - `database/sqlite/V1__init.sql`
+  - `database/sqlite/V2__init_user.sql`
+  - `database/postgresql/V2__init_user.sql`
+
 ---
 
-## 6. Mẫu Hướng Dẫn Phát Triển Tính Năng Mới (Recipe for AI Agent)
+## 6. Quản Lý Giao Dịch (Transaction Management)
 
-> **Khi nhận yêu cầu tạo mới một module (Ví dụ: `Order`):**
-> 1. **Tạo Entity**: `vn.org.thn.app.demo.domain.Order` kế thừa `BaseEntity`, khai báo `@Entity`, `@Table(name = "tbl_order")`, các trường với `@Column`.
-> 2. **Tạo Repository**: `vn.org.thn.app.demo.infrastructure.OrderRepository` kế thừa `BaseRepositoryImpl<Order, Long>` với annotation `@Repository`.
-> 3. **Tạo Service**: `vn.org.thn.app.demo.application.OrderService` (nếu có xử lý logic phức tạp).
-> 4. **Tạo Controller**: `vn.org.thn.app.demo.api.OrderCtl` kế thừa `BaseCtl`, gắn `@RestController`, `@RequestMapping("/public/order")`, cùng Swagger `@Operation` và `@ApiResponses`.
+Đối với các Use Case nghiệp vụ tại tầng Application Service có nhiều thao tác ghi CSDL (`save`, `update`, `delete`), bắt buộc sử dụng annotation `@Transactional(rollbackFor = Exception.class)` để đảm bảo tính toàn vẹn dữ liệu:
+
+```java
+package vn.org.thn.app.modules.user.application;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import vn.org.thn.app.modules.user.infrastructure.UserRepository;
+
+@Service
+public class UserService {
+
+    private final UserRepository userRepository;
+
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void createUserWithOrder(...) {
+        // Nếu bất kỳ thao tác nào quăng Exception, toàn bộ Transaction sẽ rollback
+        userRepository.save(user);
+        orderRepository.save(order);
+    }
+}
+```
+
+---
+
+## 7. Hướng Dẫn Viết Unit Test
+
+Mọi module mới khi tạo ra **bắt buộc** phải có bài kiểm thử độc lập đặt tại `src/test/java/vn/org/thn/app/modules/<module_name>/`:
+
+```java
+package vn.org.thn.app.modules.user;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest
+public class UserServiceTest {
+
+    @Autowired
+    private UserService userService;
+
+    @Test
+    void testCreateUserSuccess() {
+        // Given
+        UserCreateRequest req = new UserCreateRequest();
+        req.setUsername("testuser");
+        
+        // When
+        UserResponse resp = userService.createUser(req);
+        
+        // Then
+        Assertions.assertNotNull(resp.getId());
+        Assertions.assertEquals("testuser", resp.getUsername());
+    }
+}
+```
+
+---
+
+## 8. Swagger UI & Cấu Hình Bí Mật (Secrets)
+
+### 8.1 Đường Dẫn Swagger UI & OpenAPI Docs
+Khi ứng dụng khởi chạy (mặc định port `8080`):
+- **Giao diện Swagger UI**: `http://localhost:8080/api.html`
+- **OpenAPI Json Docs**: `http://localhost:8080/doc`
+
+### 8.2 Cấu Hình Bí Mật (`config/secrets.yaml`)
+Để tránh lộ mật khẩu CSDL hoặc API Key lên Git repository:
+- Credentials thực tế được lưu tại file `config/secrets.yaml` (file này nằm trong `.gitignore`).
+- File mẫu cấu trúc: `config/secrets.yaml.example`.
+- Spring Boot tự động import qua cấu hình `spring.config.import: "optional:file:./config/secrets.yaml"`.
+
+---
+
+## 9. Mẫu Hướng Dẫn Phát Triển Tính Năng Mới (Recipe for AI Agent)
+
+> 🤖 **Khi nhận yêu cầu tạo mới một module (Ví dụ: `Order`):**
+> 1. **Tạo Entity**: `vn.org.thn.app.modules.order.domain.entity.OrderEntity` kế thừa `BaseEntity`, khai báo `@Entity`, `@Table(name = "tbl_order")`, các trường với `@Column`.
+> 2. **Tạo Repository**: `vn.org.thn.app.modules.order.infrastructure.OrderRepository` kế thừa `BaseRepositoryImpl<OrderEntity, Long>` với annotation `@Repository`.
+> 3. **Tạo DTOs**: `OrderCreateRequest`, `OrderUpdateRequest`, `OrderResponse` trong `vn.org.thn.app.modules.order.api.dto/`.
+> 4. **Tạo Service**: `vn.org.thn.app.modules.order.application.OrderService` xử lý logic nghiệp vụ và phân trang với `@Transactional`.
+> 5. **Tạo Controller**: `vn.org.thn.app.modules.order.api.OrderCtl` kế thừa `BaseCtl`, gắn `@RestController`, `@RequestMapping("/public/order")`, kèm chú thích Swagger `@Tag` và `@Operation`.
+> 6. **Tạo Migration SQL**: Thêm file `database/<db_type>/V<N>__init_order.sql`.
+> 7. **Tạo Unit Test**: Thêm `src/test/java/vn/org/thn/app/modules/order/OrderServiceTest.java`.

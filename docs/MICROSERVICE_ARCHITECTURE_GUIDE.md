@@ -128,7 +128,7 @@ Mỗi thư mục con trong `modules/` đại diện cho một **Microservice Dom
 | `docs/` | Chứa toàn bộ tài liệu quy chuẩn kiến trúc và API của dự án. | `MICROSERVICE_ARCHITECTURE_GUIDE.md`, `BASE_FRAMEWORK_GUIDE.md`, `LANGUAGE_API_GUIDE.md` |
 | `html/` | Chứa build tĩnh của giao diện React served bởi Spring Boot. | `html/build/languages/*.json` |
 | `lang/` | Chứa các file dữ liệu dịch thuật đa ngôn ngữ JSON. | `vi.json`, `en.json` |
-| `mapper/` | Chứa file MyBatis XML cho truy vấn SQL động. | `DynamicSQL.xml` |
+| `mapper/` | Chứa file MyBatis XML cho truy vấn SQL động của ORM engine và custom SQL. | `DynamicSQL.xml`, `<Module>CustomMapper.xml` |
 | `src/main/resources/` | Cấu hình mặc định của Spring Boot. | `application.yaml`, `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` |
 
 ---
@@ -163,6 +163,7 @@ Mỗi thư mục con trong `modules/` đại diện cho một **Microservice Dom
 - **Nhiệm vụ**: Thực thi giao tiếp dữ liệu (Database access, Gọi HTTP REST Client sang service khác).
 - **Quy tắc**:
   - Repository **bắt buộc kế thừa `BaseRepositoryImpl<Entity, Long>`**.
+  - Đối với câu truy vấn phức tạp hoặc báo cáo đa bảng, tạo Java `@Mapper` interface trong package `infrastructure/mapper/` (ví dụ: `modules/<name>/infrastructure/mapper/<Module>CustomMapper.java`), file XML tương ứng đặt ở `mapper/<Module>CustomMapper.xml`, và gọi trong Repository thông qua `mapper(CustomMapper.class)`.
 
 ---
 
@@ -189,3 +190,4 @@ Khi cần phát triển một Microservice Module mới (Ví dụ: `Product`):
 > 3. **Cú Pháp QueryBuilder**: Khi thực hiện truy vấn DB, sử dụng Method Reference dạng `eq(Entity::getFieldName, value)` thay vì truyền String cứng.
 > 4. **Tài Liệu Swagger**: Mọi REST Controller mới khởi tạo phải có đầy đủ chú thích `@Tag`, `@Operation`, và `@ApiResponses`.
 > 5. **Kiểm Thử Độc Lập**: Mỗi module tạo mới phải đi kèm file Unit Test tương ứng trong `src/test/java/vn/org/thn/app/modules/<module_name>/`.
+> 6. **Custom MyBatis XML Mappers**: Khi viết SQL phức tạp hoặc báo cáo JOIN nhiều bảng, tạo file XML tại `mapper/<Module>CustomMapper.xml`, tạo Interface `@Mapper` tại `modules/<name>/infrastructure/mapper/` và gọi thông qua `mapper(CustomMapper.class)` trong Repository.
