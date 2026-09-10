@@ -21,6 +21,10 @@ Trước khi thực hiện yêu cầu của người dùng, hãy mở và đọc
    👉 [LANGUAGE_API_GUIDE.md](file:///Volumes/Data/04.MyProject/java-project/app-service/docs/LANGUAGE_API_GUIDE.md)
    *(Đọc file này khi cần xử lý hoặc gọi API liên quan đến đa ngôn ngữ và dịch thuật).*
 
+4. 💬 **Bộ Mẫu Câu Lệnh Cho Người Dùng (Prompt Templates)**:
+   👉 [PROMPT_TEMPLATES.md](file:///Volumes/Data/04.MyProject/java-project/app-service/docs/PROMPT_TEMPLATES.md)
+   *(Tham khảo file này để hiểu các dạng câu lệnh/yêu cầu mẫu từ người dùng).*
+
 ---
 
 ## 🚨 2. Các Điều Luật Vàng Cho AI Agent (Golden Execution Rules)
