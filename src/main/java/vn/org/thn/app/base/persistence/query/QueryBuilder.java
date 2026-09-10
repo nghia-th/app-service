@@ -268,6 +268,9 @@ public final class QueryBuilder<T> extends BaseConditionBuilder<T, QueryBuilder<
             selectColumns.clear();
             selectColumns.add(column(fieldName(field)));
             List<Object> result = queryExecutor.selectColumn(buildSql(), params);
+            if (result == null) {
+                return List.of();
+            }
             List<R> out = new ArrayList<>(result.size());
             for (Object o : result) {
                 out.add((R) o);
