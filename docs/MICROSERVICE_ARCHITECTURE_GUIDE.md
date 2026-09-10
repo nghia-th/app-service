@@ -123,6 +123,7 @@ Mỗi thư mục con trong `modules/` đại diện cho một **Microservice Dom
 
 | Thư mục ngoài `src/main/java` | Loại thông tin lưu trữ | Nội dung chi tiết |
 |---|---|---|
+| `AGENT.md` | File chỉ thị quy chuẩn đầu tiên dành riêng cho AI Coding Agents. | `AGENT.md` |
 | `config/` | Cấu hình bí mật bên ngoài ứng dụng. | `secrets.yaml` (chứa username/password CSDL thật, được gitignore), `secrets.yaml.example` |
 | `database/` | Chứa các Script SQL Migration cho Flyway phân theo loại CSDL. | `sqlite/V1__init.sql`, `postgresql/V1__init.sql`, `mysql/V1__init.sql`, `oracle/`, `sqlserver/` |
 | `docs/` | Chứa toàn bộ tài liệu quy chuẩn kiến trúc và API của dự án. | `MICROSERVICE_ARCHITECTURE_GUIDE.md`, `BASE_FRAMEWORK_GUIDE.md`, `LANGUAGE_API_GUIDE.md` |
