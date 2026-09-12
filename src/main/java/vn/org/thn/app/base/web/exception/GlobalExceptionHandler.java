@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -91,6 +92,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(CommonErrorCode.VALIDATION_FAILED, "File is too large"));
+    }
+
+    /**
+     * A DB constraint was violated (unique/foreign-key/not-null) - most commonly a race that slipped
+     * past an application-level pre-check (e.g. two concurrent "create user" calls both passing an
+     * existsByUsername/existsByEmail check before either row is committed). Reported as 409 Conflict
+     * instead of falling through to the generic 500 handler below. A service that wants a more
+     * specific message (e.g. "username already exists" vs "email already exists") should still catch
+     * this itself where it has that context - see UserService#createUser.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        log.warn("Data integrity violation: {}", ex.getMessage());
+        return ResponseEntity
+                .status(CommonErrorCode.CONFLICT.getHttpStatus())
+                .body(ApiResponse.error(CommonErrorCode.CONFLICT, "Request conflicts with existing data (duplicate or constraint violation)"));
     }
 
     /** Catch-all: anything not mapped above is logged in full server-side and reported as a generic 500 to the client. */

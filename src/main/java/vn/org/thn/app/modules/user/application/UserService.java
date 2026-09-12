@@ -1,6 +1,7 @@
 package vn.org.thn.app.modules.user.application;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.org.thn.app.base.core.dto.page.PageResponse;
@@ -77,8 +78,17 @@ public class UserService {
         entity.setRole(request.getRole() != null ? request.getRole() : "USER");
         entity.setStatus("ACTIVE");
 
-        UserEntity saved = userRepository.save(entity);
-        return UserResponse.fromEntity(saved);
+        // The existsByUsername/existsByEmail checks above are check-then-act and can race with a
+        // concurrent create for the same username/email; the DB's UNIQUE constraints are the real
+        // guard, so a violation that gets past those checks is translated into a friendly
+        // BusinessException here instead of surfacing as a raw SQL error to the client.
+        try {
+            UserEntity saved = userRepository.save(entity);
+            return UserResponse.fromEntity(saved);
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(CommonErrorCode.CONFLICT,
+                    "Username or email already exists: " + request.getUsername(), e);
+        }
     }
 
     @Transactional
@@ -98,8 +108,13 @@ public class UserService {
         if (request.getStatus() != null) entity.setStatus(request.getStatus());
         if (request.getRole() != null) entity.setRole(request.getRole());
 
-        UserEntity updated = userRepository.save(entity);
-        return UserResponse.fromEntity(updated);
+        try {
+            UserEntity updated = userRepository.save(entity);
+            return UserResponse.fromEntity(updated);
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(CommonErrorCode.CONFLICT,
+                    "Email already exists: " + request.getEmail(), e);
+        }
     }
 
     @Transactional

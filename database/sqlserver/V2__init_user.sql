@@ -1,3 +1,4 @@
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tbl_user' AND xtype='U')
 CREATE TABLE tbl_user
 (
     id         BIGINT IDENTITY(1,1) PRIMARY KEY,

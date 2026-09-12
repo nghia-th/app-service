@@ -1,3 +1,4 @@
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='translate' AND xtype='U')
 CREATE TABLE translate
 (
     lang_key NVARCHAR(255) NOT NULL,
