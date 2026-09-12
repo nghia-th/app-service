@@ -12,6 +12,7 @@ import vn.org.thn.app.modules.user.api.dto.UserUpdateRequest;
 import vn.org.thn.app.modules.user.domain.entity.UserEntity;
 import vn.org.thn.app.modules.user.infrastructure.UserRepository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -63,6 +64,11 @@ public class UserService {
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new BusinessException(CommonErrorCode.VALIDATION_FAILED, "Username already exists: " + request.getUsername());
         }
+        if (request.getEmail() != null && !request.getEmail().isBlank()) {
+            if (userRepository.existsByEmail(request.getEmail())) {
+                throw new BusinessException(CommonErrorCode.VALIDATION_FAILED, "Email already exists: " + request.getEmail());
+            }
+        }
 
         UserEntity entity = new UserEntity();
         entity.setUsername(request.getUsername());
@@ -82,7 +88,12 @@ public class UserService {
             throw new BusinessException(CommonErrorCode.NOT_FOUND, "User not found with id: " + id);
         }
 
-        if (request.getEmail() != null) entity.setEmail(request.getEmail());
+        if (request.getEmail() != null && !request.getEmail().equalsIgnoreCase(entity.getEmail())) {
+            if (userRepository.existsByEmail(request.getEmail())) {
+                throw new BusinessException(CommonErrorCode.VALIDATION_FAILED, "Email already exists: " + request.getEmail());
+            }
+            entity.setEmail(request.getEmail());
+        }
         if (request.getFullName() != null) entity.setFullName(request.getFullName());
         if (request.getStatus() != null) entity.setStatus(request.getStatus());
         if (request.getRole() != null) entity.setRole(request.getRole());

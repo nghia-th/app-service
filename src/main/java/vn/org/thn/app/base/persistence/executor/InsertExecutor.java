@@ -4,6 +4,7 @@ import org.apache.commons.lang3.reflect.FieldUtils;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import vn.org.thn.app.base.core.entity.BaseEntity;
 import vn.org.thn.app.base.persistence.dialect.SqlDialect;
 import vn.org.thn.app.base.persistence.metadata.EntityCache;
 import vn.org.thn.app.base.persistence.metadata.EntityInfo;
@@ -207,6 +208,12 @@ public class InsertExecutor extends BaseExecutor {
     public <T> T save(T entity) {
         Class<T> clazz = (Class<T>) entity.getClass();
         EntityInfo info = EntityCache.get(clazz);
+        info.populateUnaccent(entity);
+
+        boolean isBaseEntity = entity instanceof BaseEntity;
+        if (isBaseEntity) {
+            BaseEntity.populateInsertAudit((BaseEntity) entity);
+        }
 
         Map<String, Object> paramMap = new LinkedHashMap<>();
         Set<String> columns = new LinkedHashSet<>();
@@ -267,6 +274,29 @@ public class InsertExecutor extends BaseExecutor {
         if (exist(info, paramMap)) {
             Set<String> updateCols = new LinkedHashSet<>(columns);
             updateCols.removeAll(primaryKeys);
+            if (isBaseEntity) {
+                BaseEntity base = (BaseEntity) entity;
+                BaseEntity.populateUpdateAudit(base);
+
+                String updatedAtCol = info.getFieldColumns().get("updatedAt");
+                if (updatedAtCol != null) {
+                    paramMap.put(updatedAtCol, base.getUpdatedAt());
+                }
+                String updatedByCol = info.getFieldColumns().get("updatedBy");
+                if (updatedByCol != null) {
+                    paramMap.put(updatedByCol, base.getUpdatedBy());
+                }
+
+                // Protect createdAt and createdBy from being overwritten on UPDATE
+                String createdAtCol = info.getFieldColumns().get("createdAt");
+                if (createdAtCol != null) {
+                    updateCols.remove(createdAtCol);
+                }
+                String createdByCol = info.getFieldColumns().get("createdBy");
+                if (createdByCol != null) {
+                    updateCols.remove(createdByCol);
+                }
+            }
             update(updateCols, info, paramMap);
             return entity;
         }

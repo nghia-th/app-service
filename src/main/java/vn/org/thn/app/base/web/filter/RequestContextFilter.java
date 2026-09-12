@@ -50,6 +50,11 @@ public class RequestContextFilter implements Filter {
             "HTTP_CLIENT_IP", "HTTP_X_FORWARDED_FOR"
     };
 
+    private static final java.util.regex.Pattern SENSITIVE_FIELD_PATTERN =
+            java.util.regex.Pattern.compile("(?i)\"(password|passwd|secret|token|accessToken|refreshToken|clientSecret)\"\\s*:\\s*(\"[^\"]*\"|[^,}\\s]+)");
+
+    private static final String[] USER_HEADERS = {"X-User-Id", "X-Username", "username", "user"};
+
     /** Runs once per request: populates MDC, logs the request line (+ body when small enough to be safe), delegates downstream, then always clears MDC. */
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
@@ -59,10 +64,15 @@ public class RequestContextFilter implements Filter {
         String requestId = firstNonBlank(httpRequest.getHeader(CommonConstants.REQUEST_ID_HEADER), UUID.randomUUID().toString());
         String clientIp = resolveClientIp(httpRequest);
         String token = httpRequest.getHeader("token");
+        String user = resolveUser(httpRequest);
 
         MDC.put(MDC_REQUEST_ID, requestId);
         MDC.put(MDC_CLIENT_IP, clientIp);
         MDC.put(MDC_TOKEN, token != null ? token : "");
+
+        if (user != null) {
+            vn.org.thn.app.base.core.context.UserContext.setCurrentUser(user);
+        }
 
         try {
             if (isFormOrMultipart(httpRequest) || !withinLoggableBodySize(httpRequest)) {
@@ -70,13 +80,39 @@ public class RequestContextFilter implements Filter {
                 chain.doFilter(request, response);
             } else {
                 CachedBodyHttpServletRequest wrapped = new CachedBodyHttpServletRequest(httpRequest);
+                String safeBody = sanitizeBody(httpRequest.getRequestURI(), wrapped.getBody());
                 log.info("Request: {} {} from {}\nBody: {}", httpRequest.getMethod(), httpRequest.getRequestURI(),
-                        clientIp, wrapped.getBody());
+                        clientIp, safeBody);
                 chain.doFilter(wrapped, response);
             }
         } finally {
             MDC.clear();
+            vn.org.thn.app.base.core.context.UserContext.clear();
         }
+    }
+
+    public static String resolveUser(HttpServletRequest request) {
+        for (String header : USER_HEADERS) {
+            String value = request.getHeader(header);
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private static boolean isSensitivePath(String uri) {
+        if (uri == null) return false;
+        String lower = uri.toLowerCase();
+        return lower.contains("/auth") || lower.contains("/login") || lower.contains("/password");
+    }
+
+    private static String sanitizeBody(String uri, String body) {
+        if (body == null || body.isBlank()) return body;
+        if (isSensitivePath(uri)) {
+            return "[PROTECTED]";
+        }
+        return SENSITIVE_FIELD_PATTERN.matcher(body).replaceAll("\"$1\": \"******\"");
     }
 
     /**

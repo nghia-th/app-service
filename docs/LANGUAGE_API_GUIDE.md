@@ -30,6 +30,18 @@ Tài liệu chi tiết toàn bộ các Endpoint thuộc phân hệ quản lý ng
 
 ---
 
+## 1.1. Cơ Chế Khởi Tạo & Đồng Bộ Ngôn Ngữ (Startup Batch Ingestion)
+Khi ứng dụng khởi chạy, `LanguageService.loadLanguage()` thực hiện nạp dữ liệu theo quy trình tối ưu:
+1. **Đọc File**: Quét toàn bộ file JSON trong thư mục `lang/*.json` và nạp vào bộ nhớ Cache.
+2. **Đối Soát (Smart Diffing)**: Truy vấn danh sách khóa ngôn ngữ hiện có trong CSDL để so sánh đối soát với file JSON.
+3. **Lưu Hàng Loạt (Batch Insert)**: Chỉ trích xuất các cặp `(langKey, lang)` chưa tồn tại trong CSDL và thực hiện lưu hàng loạt qua `saveAll()`.
+- **Ưu điểm**:
+  - Loại bỏ hoàn toàn nguy cơ xung đột khóa chính (Primary Key Collision).
+  - Tối ưu hiệu năng, giảm thời gian khởi động ứng dụng xuống nhiều lần so với cơ chế insert từng dòng.
+  - Bảo toàn các giá trị dịch người dùng đã cập nhật hoặc tùy biến trên CSDL.
+
+---
+
 ## 2. Danh Sách Các Endpoint API
 
 | Method | Endpoint | Mô tả |

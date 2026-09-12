@@ -1,0 +1,31 @@
+# Cấu hình môi trường Phát triển (Development)
+server:
+  port: 8080
+
+base:
+  database:
+    type: SQLITE                  # SQLITE / POSTGRESQL / MYSQL / SQLSERVER / ORACLE
+    db-name: quiz_db
+    dbPrefix: dev
+    sql-log: FULL                 # Môi trường DEV: FULL để xem chi tiết toàn bộ câu SQL và bind parameters
+    pool:
+      max-pool-size: 2
+      min-idle: 1
+    postgresql:
+      host: localhost
+      port: 5432
+    mysql:
+      host: localhost
+      port: 3306
+    sqlserver:
+      host: localhost
+      port: 1433
+    oracle:
+      jdbc-url: jdbc:oracle:thin:@//localhost:1521/XEPDB1
+    sqlite:
+      file-name: dev_app.db
+
+logging:
+  level:
+    root: INFO
+    vn.org.thn.app: DEBUG         # Chi tiết log cho package nghiệp vụ

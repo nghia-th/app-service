@@ -16,6 +16,11 @@ public class EntityInfo {
     private final Set<String> ids = new LinkedHashSet<>();             // column names that are (part of) the PK
     private String identityColumn;                                    // column name with @GeneratedValue(IDENTITY), if any
     private boolean autoIdentity;
+    private final Map<Field, Field> unaccentFieldMap = new LinkedHashMap<>(); // target unaccent field -> source field
+
+    public Map<Field, Field> getUnaccentFieldMap() {
+        return unaccentFieldMap;
+    }
 
     public String getTableName() {
         return tableName;
@@ -57,5 +62,31 @@ public class EntityInfo {
 
     public void setAutoIdentity(boolean autoIdentity) {
         this.autoIdentity = autoIdentity;
+    }
+
+    /**
+     * Auto-populates any field annotated with @Unaccent by reading from its declared source field,
+     * converting via {@link vn.org.thn.app.base.util.StringUtils#toUnaccent(String)}, and setting the
+     * unaccented value on the target field.
+     */
+    public void populateUnaccent(Object entity) {
+        if (entity == null || unaccentFieldMap.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<Field, Field> entry : unaccentFieldMap.entrySet()) {
+            Field targetField = entry.getKey();
+            Field sourceField = entry.getValue();
+            try {
+                Object sourceVal = sourceField.get(entity);
+                if (sourceVal instanceof String s) {
+                    targetField.set(entity, vn.org.thn.app.base.util.StringUtils.toUnaccent(s));
+                } else if (sourceVal == null) {
+                    targetField.set(entity, null);
+                }
+            } catch (Exception e) {
+                throw new IllegalStateException("Cannot populate @Unaccent field " + targetField.getName()
+                        + " on " + entity.getClass().getName(), e);
+            }
+        }
     }
 }

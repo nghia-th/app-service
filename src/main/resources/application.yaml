@@ -1,57 +1,29 @@
 spring:
   application:
     name: app-service
-  # Externalized config (secrets in particular) - see config/secrets.yaml.example for the
-  # expected structure. "optional:" so the app still boots (against the default SQLITE db,
-  # which needs no credentials) when a dev hasn't created config/secrets.yaml yet. The file
-  # is gitignored - never commit real credentials here, only in that untracked file.
+  profiles:
+    active: dev
   config:
-    import: "optional:file:./config/secrets.yaml"
+    import:
+      - "optional:file:./config/secrets.yaml"
+      - "optional:file:./config/secrets-${spring.profiles.active:dev}.yaml"
   datasource:
-    # username/password moved to config/secrets.yaml (real Postgres/MySQL/etc. credentials -
-    # not needed at all for the default SQLITE engine). See spring.config.import above.
     username: ${DATASOURCE_USERNAME:}
     password: ${DATASOURCE_PASSWORD:}
   servlet:
     multipart:
-      # Nguong Spring TU CHOI truoc khi request toi duoc controller - phai LON HON gioi han nghiep
-      # vu 5MB cua LessonService#uploadImage (QuizErrorCode.LESSON_IMAGE_TOO_LARGE) de check nghiep
-      # vu (bao loi tieng Viet ro rang qua QUIZ_017) luon la nguoi bat truoc, khong de Spring tra ve
-      # loi MaxUploadSizeExceededException chung chung (da them handler rieng o base's
-      # GlobalExceptionHandler, nhung message it than thien hon).
       max-file-size: 80MB
       max-request-size: 100MB
+
 springdoc:
   swagger-ui:
     path: /api.html
     defaultModelsExpandDepth: -1
   api-docs:
     path: /doc
+
 mybatis:
   mapper-locations: file:./mapper/*.xml
-
-base:
-  database:
-    type: SQLITE              # SQLITE / POSTGRESQL / MYSQL / SQLSERVER / ORACLE (mac dinh SQLITE)
-    db-name: quiz_db              # ten database thuc te (mac dinh "app")
-    dbPrefix: dev                 # ghep truoc db-name -> "dev_quiz_db" (mac dinh rong "")
-    sql-log: OFF                  # OFF / BASIC / FULL (mac dinh OFF)
-    pool:
-      max-pool-size: 1            # HikariCP (mac dinh 5) //sqlite set 1
-      min-idle: 1                 # HikariCP (mac dinh 1)
-    postgresql:
-      host: localhost             # mac dinh localhost
-      port: 5432                  # mac dinh 5432
-    mysql:
-      host: localhost             # mac dinh localhost (dang dung Postgres nen phan nay chua can, de tham khao)
-      port: 3306                  # mac dinh 3306
-    sqlserver:
-      host: localhost             # mac dinh localhost
-      port: 1433                  # mac dinh 1433
-    oracle:
-      jdbc-url: jdbc:oracle:thin:@//localhost:1521/XEPDB1  # Oracle van dung URL day du, khong tach host/port
-    sqlite:
-      file-name: app.db
 
 logging:
   pattern:

@@ -1,0 +1,29 @@
+# Cấu hình môi trường Thử nghiệm / Tiền sản xuất (Staging / UAT)
+server:
+  port: 8080
+
+base:
+  database:
+    type: POSTGRESQL              # Staging thường dùng CSDL quan hệ thực tế như Postgres / MySQL
+    db-name: quiz_db
+    dbPrefix: staging
+    sql-log: BASIC                # Mức log BASIC hiển thị SQL và thời gian thực thi
+    pool:
+      max-pool-size: 10
+      min-idle: 2
+    postgresql:
+      host: ${STAGING_DB_HOST:staging-db.internal}
+      port: ${STAGING_DB_PORT:5432}
+    mysql:
+      host: ${STAGING_DB_HOST:staging-db.internal}
+      port: ${STAGING_DB_PORT:3306}
+    sqlserver:
+      host: ${STAGING_DB_HOST:staging-db.internal}
+      port: ${STAGING_DB_PORT:1433}
+    oracle:
+      jdbc-url: ${STAGING_ORACLE_URL:jdbc:oracle:thin:@//staging-db.internal:1521/XEPDB1}
+
+logging:
+  level:
+    root: INFO
+    vn.org.thn.app: INFO

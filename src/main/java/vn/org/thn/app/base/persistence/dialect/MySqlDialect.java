@@ -28,12 +28,20 @@ public class MySqlDialect implements SqlDialect {
         return sql + " LIMIT " + off + ", " + lim;
     }
 
-    /** MySQL's session-scoped {@code LAST_INSERT_ID()} reads back the identity value from the INSERT run just before it in the same statement/connection. */
+    /** Plain INSERT - the generated identity value is retrieved in a second query via LAST_INSERT_ID() within the same transaction. */
     @Override
     public String buildInsertReturning(String table, String columns, String params, String identityColumn) {
-        return "INSERT INTO " + table + " (" + columns + ")\n"
-                + "VALUES (" + params + ");\n"
-                + "SELECT LAST_INSERT_ID();";
+        return "INSERT INTO " + table + " (" + columns + ") VALUES (" + params + ")";
+    }
+
+    @Override
+    public boolean singleStatementReturning() {
+        return false;
+    }
+
+    @Override
+    public String buildIdentitySelect(String table, String identityColumn) {
+        return "SELECT LAST_INSERT_ID();";
     }
 
     @Override

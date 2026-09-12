@@ -1,0 +1,20 @@
+# Cấu hình môi trường Kiểm thử (Test / CI)
+server:
+  port: 0                         # Random port cho test suites
+
+base:
+  database:
+    type: SQLITE
+    db-name: quiz_db
+    dbPrefix: test
+    sql-log: BASIC
+    pool:
+      max-pool-size: 1
+      min-idle: 1
+    sqlite:
+      file-name: test_app.db
+
+logging:
+  level:
+    root: WARN
+    vn.org.thn.app: INFO

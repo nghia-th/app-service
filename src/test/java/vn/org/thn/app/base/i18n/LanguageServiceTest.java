@@ -15,10 +15,15 @@ import vn.org.thn.app.base.i18n.repository.TranslateRepository;
 import vn.org.thn.app.base.i18n.service.LanguageService;
 import vn.org.thn.app.base.persistence.lambda.SFunction;
 import vn.org.thn.app.base.persistence.query.DeleteBuilder;
+import vn.org.thn.app.base.persistence.query.QueryBuilder;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -67,5 +72,36 @@ class LanguageServiceTest {
 
         verify(language, times(1)).delete("btn.save");
         verify(translateRepository, times(1)).delete();
+    }
+
+    @Test
+    @DisplayName("Should batch insert only new translation keys on startup")
+    @SuppressWarnings("unchecked")
+    void loadLanguage_withNewAndExistingKeys_batchInsertsOnlyNewKeys() {
+        Translate existing = new Translate();
+        existing.setLang("vi");
+        existing.setLangKey("btn.save");
+        existing.setValue("Lưu (DB)");
+
+        QueryBuilder<Translate> queryBuilder = mock(QueryBuilder.class);
+        when(translateRepository.query()).thenReturn(queryBuilder);
+        when(queryBuilder.list()).thenReturn(List.of(existing));
+
+        Map<String, Map<String, String>> memoryMap = new HashMap<>();
+        Map<String, String> viMap = new ConcurrentHashMap<>();
+        viMap.put("btn.save", "Lưu (File)");
+        viMap.put("btn.cancel", "Hủy (File)");
+        memoryMap.put("vi", viMap);
+
+        when(language.getValues()).thenReturn(memoryMap);
+
+        languageService.loadLanguage();
+
+        // Should batch insert ONLY the new key ("btn.cancel"), not "btn.save"
+        verify(translateRepository, times(1)).saveAll(argThat(collection -> {
+            List<Translate> list = List.copyOf(collection);
+            return list.size() == 1 && "btn.cancel".equals(list.get(0).getLangKey());
+        }));
+        verify(translateRepository, never()).save(any(Translate.class));
     }
 }

@@ -1,0 +1,35 @@
+# Cấu hình môi trường Vận hành thực tế (Production)
+server:
+  port: ${PORT:8080}
+
+base:
+  database:
+    type: POSTGRESQL              # CSDL production (PostgreSQL / MySQL / Oracle)
+    db-name: quiz_db
+    dbPrefix: prod
+    sql-log: OFF                  # Tắt toàn bộ SQL log trên Production để đảm bảo hiệu năng và bảo mật
+    pool:
+      max-pool-size: 20           # Sức tải lớn cho môi trường Production
+      min-idle: 5
+    postgresql:
+      host: ${PROD_DB_HOST:prod-db.internal}
+      port: ${PROD_DB_PORT:5432}
+    mysql:
+      host: ${PROD_DB_HOST:prod-db.internal}
+      port: ${PROD_DB_PORT:3306}
+    sqlserver:
+      host: ${PROD_DB_HOST:prod-db.internal}
+      port: ${PROD_DB_PORT:1433}
+    oracle:
+      jdbc-url: ${PROD_ORACLE_URL:jdbc:oracle:thin:@//prod-db.internal:1521/XEPDB1}
+
+springdoc:
+  swagger-ui:
+    enabled: false                # Tắt Swagger UI công khai trên Production để bảo mật
+  api-docs:
+    enabled: false
+
+logging:
+  level:
+    root: WARN                    # Chỉ log từ mức WARN trở lên để tối ưu I/O đĩa
+    vn.org.thn.app: INFO

@@ -14,7 +14,11 @@ import vn.org.thn.app.base.i18n.repository.TranslateRepository;
 import vn.org.thn.app.base.util.JsonUtils;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -56,7 +60,7 @@ public class LanguageService extends IBase {
 
     /** Where the React build served by this service keeps its own copy of the language JSON files. */
     @Value("${lang.react-build:build}")
-    private String reactBuild;
+    private String reactBuild = "build";
 
 
     /**
@@ -83,18 +87,28 @@ public class LanguageService extends IBase {
      */
     @PostConstruct
     public void loadLanguage() {
-        translateRepository.query().list().forEach(row ->
-                language.getValues()
-                        .computeIfAbsent(row.getLang(), k -> new ConcurrentHashMap<>())
-                        .put(row.getLangKey(), row.getValue()));
+        Set<String> existingDbKeys = new HashSet<>();
+        translateRepository.query().list().forEach(row -> {
+            existingDbKeys.add(row.getLang() + "::" + row.getLangKey());
+            language.getValues()
+                    .computeIfAbsent(row.getLang(), k -> new ConcurrentHashMap<>())
+                    .put(row.getLangKey(), row.getValue());
+        });
 
+        List<Translate> newTranslates = new ArrayList<>();
         language.getValues().forEach((lang, values) -> values.forEach((langKey, value) -> {
-            Translate translate = new Translate();
-            translate.setLangKey(langKey);
-            translate.setLang(lang);
-            translate.setValue(value == null ? "" : value);
-            translateRepository.save(translate);
+            if (!existingDbKeys.contains(lang + "::" + langKey)) {
+                Translate translate = new Translate();
+                translate.setLangKey(langKey);
+                translate.setLang(lang);
+                translate.setValue(value == null ? "" : value);
+                newTranslates.add(translate);
+            }
         }));
+
+        if (!newTranslates.isEmpty()) {
+            translateRepository.saveAll(newTranslates);
+        }
 
         writeFileData();
     }

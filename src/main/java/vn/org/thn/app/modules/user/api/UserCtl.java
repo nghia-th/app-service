@@ -3,6 +3,7 @@ package vn.org.thn.app.modules.user.api;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -51,7 +52,7 @@ public class UserCtl extends BaseCtl {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error or username exists")
     })
     @PostMapping
-    public ResponseEntity<ApiResponse<UserResponse>> create(@RequestBody UserCreateRequest request) {
+    public ResponseEntity<ApiResponse<UserResponse>> create(@Valid @RequestBody UserCreateRequest request) {
         return ok(userService.createUser(request));
     }
 
@@ -63,7 +64,7 @@ public class UserCtl extends BaseCtl {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> update(
             @PathVariable("id") Long id,
-            @RequestBody UserUpdateRequest request) {
+            @Valid @RequestBody UserUpdateRequest request) {
         return ok(userService.updateUser(id, request));
     }
 

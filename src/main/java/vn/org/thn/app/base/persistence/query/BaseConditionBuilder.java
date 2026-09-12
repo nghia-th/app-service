@@ -5,6 +5,7 @@ import vn.org.thn.app.base.persistence.executor.QueryExecutor;
 import vn.org.thn.app.base.persistence.lambda.LambdaFieldResolver;
 import vn.org.thn.app.base.persistence.lambda.SFunction;
 import vn.org.thn.app.base.persistence.metadata.EntityInfo;
+import vn.org.thn.app.base.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -206,6 +207,56 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
         return endsWith(fieldName(field), value);
     }
 
+    /**
+     * Splits {@code keyword} into whitespace-delimited tokens and adds a case-insensitive
+     * {@code LOWER(field) LIKE LOWER('%token%')} condition for each token (AND-joined).
+     * Order of tokens in {@code keyword} does not matter.
+     * No-op if {@code keyword} is null/blank.
+     */
+    public SELF likeAnyOrder(String field, String keyword) {
+        if (keyword == null || keyword.isBlank()) return self();
+        String[] tokens = keyword.trim().split("\\s+");
+        String col = column(field);
+        for (String token : tokens) {
+            if (token.isBlank()) continue;
+            String key = nextParam();
+            params.put(key, "%" + token + "%");
+            whereClauses.add(new QueryCondition("LOWER(" + col + ") LIKE LOWER(#{" + key + "})", QueryLogic.AND));
+        }
+        return self();
+    }
+
+    /** {@link #likeAnyOrder(String, String)} with the field named via a method reference instead of a string. */
+    public SELF likeAnyOrder(SFunction<T, ?> field, String keyword) {
+        return likeAnyOrder(fieldName(field), keyword);
+    }
+
+    /**
+     * Converts {@code keyword} to lowercase unaccented text, splits it into tokens, and adds a
+     * {@code field LIKE '%token%'} condition for each token (AND-joined).
+     * Typically used on columns annotated with {@link vn.org.thn.app.base.persistence.annotation.Unaccent}.
+     * No-op if {@code keyword} is null/blank.
+     */
+    public SELF likeAnyOrderUnaccent(String field, String keyword) {
+        if (keyword == null || keyword.isBlank()) return self();
+        String unaccented = StringUtils.toUnaccent(keyword);
+        if (unaccented == null || unaccented.isBlank()) return self();
+        String[] tokens = unaccented.split("\\s+");
+        String col = column(field);
+        for (String token : tokens) {
+            if (token.isBlank()) continue;
+            String key = nextParam();
+            params.put(key, "%" + token + "%");
+            whereClauses.add(new QueryCondition(col + " LIKE #{" + key + "}", QueryLogic.AND));
+        }
+        return self();
+    }
+
+    /** {@link #likeAnyOrderUnaccent(String, String)} with the field named via a method reference instead of a string. */
+    public SELF likeAnyOrderUnaccent(SFunction<T, ?> field, String keyword) {
+        return likeAnyOrderUnaccent(fieldName(field), keyword);
+    }
+
     /** Adds a {@code field IN (...)} condition (AND-joined), one bind parameter per value. No-op if {@code values} is null/empty. */
     public SELF in(String field, Collection<?> values) {
         if (values == null || values.isEmpty()) return self();
@@ -307,5 +358,10 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
         whereClauses.add(new QueryCondition(sql, QueryLogic.AND));
         params.putAll(values);
         return self();
+    }
+
+    /** Returns an unmodifiable copy of the current bind parameters. */
+    public Map<String, Object> getParams() {
+        return Map.copyOf(params);
     }
 }

@@ -39,6 +39,9 @@ public final class StringUtils {
         return "*".repeat(maskedLength) + value.substring(maskedLength);
     }
 
+    private static final java.util.regex.Pattern DIACRITICAL_MARKS =
+            java.util.regex.Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
+
     /** camelCase / PascalCase -> snake_case, e.g. "langKey" -> "lang_key" (used to derive DB column names). */
     public static String camelToSnake(String value) {
         if (isBlank(value)) {
@@ -49,4 +52,20 @@ public final class StringUtils {
         result = result.replaceAll("([A-Z])([A-Z][a-z])", "$1_$2");
         return result.toLowerCase();
     }
+
+    /**
+     * Converts accented characters (notably Vietnamese diacritics) to their unaccented equivalents.
+     * Maps 'đ'/'Đ' -> 'd'/'d', removes diacritical marks, converts to lowercase, and collapses whitespace.
+     * E.g. "Trương Hiếu Nghĩa" -> "truong hieu nghia".
+     */
+    public static String toUnaccent(String value) {
+        if (isBlank(value)) {
+            return value == null ? null : "";
+        }
+        String temp = value.replace('đ', 'd').replace('Đ', 'D');
+        String normalized = java.text.Normalizer.normalize(temp, java.text.Normalizer.Form.NFD);
+        String withoutAccents = DIACRITICAL_MARKS.matcher(normalized).replaceAll("");
+        return withoutAccents.toLowerCase().trim().replaceAll("\\s+", " ");
+    }
 }
+

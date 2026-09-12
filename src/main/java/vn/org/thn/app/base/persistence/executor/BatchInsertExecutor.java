@@ -4,6 +4,7 @@ import org.apache.commons.lang3.reflect.FieldUtils;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import vn.org.thn.app.base.core.entity.BaseEntity;
 import vn.org.thn.app.base.persistence.dialect.SqlDialect;
 import vn.org.thn.app.base.persistence.metadata.EntityCache;
 import vn.org.thn.app.base.persistence.metadata.EntityInfo;
@@ -53,6 +54,14 @@ public class BatchInsertExecutor {
 
         Class<T> clazz = (Class<T>) entities.iterator().next().getClass();
         EntityInfo info = EntityCache.get(clazz);
+        boolean isBaseEntity = BaseEntity.class.isAssignableFrom(clazz);
+
+        for (T entity : entities) {
+            info.populateUnaccent(entity);
+            if (isBaseEntity && entity instanceof BaseEntity base) {
+                BaseEntity.populateInsertAudit(base);
+            }
+        }
 
         if (info.getIdentityColumn() != null) {
             List<T> saved = new ArrayList<>(entities.size());

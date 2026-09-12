@@ -21,12 +21,20 @@ public class SqlServerDialect implements SqlDialect {
         return finalSql + " OFFSET " + off + " ROWS FETCH NEXT " + lim + " ROWS ONLY";
     }
 
-    /** {@code SCOPE_IDENTITY()} reads back the identity value from the INSERT run just before it in the same scope/batch. */
+    /** Plain INSERT - the generated identity value is retrieved in a second query via SCOPE_IDENTITY() within the same transaction. */
     @Override
     public String buildInsertReturning(String table, String columns, String params, String identityColumn) {
-        return "INSERT INTO " + table + " (" + columns + ")\n"
-                + "VALUES (" + params + ");\n\n"
-                + "SELECT SCOPE_IDENTITY();";
+        return "INSERT INTO " + table + " (" + columns + ") VALUES (" + params + ")";
+    }
+
+    @Override
+    public boolean singleStatementReturning() {
+        return false;
+    }
+
+    @Override
+    public String buildIdentitySelect(String table, String identityColumn) {
+        return "SELECT SCOPE_IDENTITY();";
     }
 
     /** Wraps a manual-id insert in {@code SET IDENTITY_INSERT ... ON/OFF}, required by SQL Server to write an explicit value into an identity column. */

@@ -2,7 +2,6 @@ package vn.org.thn.app.base.persistence.metadata;
 
 import org.apache.commons.lang3.reflect.FieldUtils;
 import vn.org.thn.app.base.persistence.annotation.*;
-import vn.org.thn.app.base.persistence.annotation.*;
 import vn.org.thn.app.base.util.StringUtils;
 
 import java.lang.reflect.Field;
@@ -62,6 +61,19 @@ public final class EntityParser {
                     info.setIdentityColumn(column);
                     info.setAutoIdentity(true);
                 }
+            }
+
+            Unaccent unaccent = field.getAnnotation(Unaccent.class);
+            if (unaccent != null && !unaccent.from().isBlank()) {
+                String sourceName = unaccent.from();
+                Field sourceField = fields.stream()
+                        .filter(f -> f.getName().equals(sourceName))
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "@Unaccent on " + clazz.getSimpleName() + "." + field.getName()
+                                        + " references non-existent source field: " + sourceName));
+                sourceField.setAccessible(true);
+                info.getUnaccentFieldMap().put(field, sourceField);
             }
         }
 

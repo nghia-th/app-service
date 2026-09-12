@@ -141,6 +141,7 @@ Mỗi thư mục con trong `modules/` đại diện cho một **Microservice Dom
 - **Nhiệm vụ**: Tiếp nhận Request từ bên ngoài, kiểm tra Validation sơ bộ, gọi Application Service và trả về Response.
 - **Quy tắc**:
   - Controller **phải kế thừa `BaseCtl`** và gắn các Swagger Annotation (`@Tag`, `@Operation`, `@ApiResponses`).
+  - Request DTO **bắt buộc khai báo Jakarta Validation annotations** (`@NotBlank`, `@NotNull`, `@Size`, `@Email`...) và Controller **phải gắn `@Valid` trước `@RequestBody`**. Lỗi sẽ được `GlobalExceptionHandler` tự động chuẩn hóa về mã `VAL_001`.
   - Dữ liệu trả về qua `ok(...)` hoặc `fail(...)` của `BaseCtl` (đóng gói trong `ApiResponse<T>`).
   - Không viết business logic trực tiếp trong Controller.
 
@@ -149,15 +150,17 @@ Mỗi thư mục con trong `modules/` đại diện cho một **Microservice Dom
 - **Nhiệm vụ**: Điều phối luồng nghiệp vụ (Orchestration), quản lý Transaction (`@Transactional`), gọi Repository.
 - **Quy tắc**:
   - Tách biệt Request DTO với Entity CSDL (không trả trực tiếp Entity ra API, phải convert sang Response DTO).
-  - Sử dụng `QueryBuilder` từ Repository để phân trang và tìm kiếm dữ liệu.
+  - Tận dụng cơ chế **Auto-Audit**: Khi gọi `save(entity)` hoặc `saveAll(list)`, framework tự động điền `createdAt`, `updatedAt`, `createdBy`, `updatedBy`. Lập trình viên **không tự gõ tay các lệnh set ngày giờ/người tạo**.
+  - Sử dụng `QueryBuilder` từ Repository để phân trang và tìm kiếm dữ liệu. Đối với các use-case tìm kiếm theo từ khóa người dùng nhập (keyword search), ưu tiên sử dụng `likeAnyOrder(Entity::getField, keyword)` hoặc `likeAnyOrderUnaccent(Entity::getUnaccentField, keyword)` để hỗ trợ tìm kiếm linh hoạt bất kể thứ tự từ và không phân biệt có dấu/không dấu.
 
 ### 3.3 Tầng Domain (Domain Layer)
 - **Vị trí**: `modules/<module_name>/domain/entity/`
 - **Nhiệm vụ**: Định nghĩa cấu trúc bảng CSDL và quy tắc nghiệp vụ cốt lõi.
 - **Quy tắc**:
-  - Class Entity kế thừa `BaseEntity`.
+  - **Bắt buộc kế thừa `BaseEntity`**: Mọi Entity đại diện cho bảng nghiệp vụ phải kế thừa `BaseEntity` để sở hữu 5 thuộc tính audit (`createdAt`, `updatedAt`, `createdBy`, `updatedBy`, `deleted`).
   - Gắn `@Entity`, `@Table(name = "tbl_<module>")`.
   - Khóa chính `@Id` + `@GeneratedValue(strategy = GenerationType.IDENTITY)`.
+  - **Trường tìm kiếm tiếng Việt**: Đối với các trường văn bản là mục tiêu tìm kiếm chính của module (họ tên, tên sản phẩm, tiêu đề...), khuyến nghị bổ sung cột unaccent và gắn annotation `@Unaccent(from = "sourceField")` để ORM tự động tính toán giá trị không dấu khi `save()`.
 
 ### 3.4 Tầng Infrastructure (Infrastructure Layer)
 - **Vị trí**: `modules/<module_name>/infrastructure/`
@@ -172,12 +175,12 @@ Mỗi thư mục con trong `modules/` đại diện cho một **Microservice Dom
 
 Khi cần phát triển một Microservice Module mới (Ví dụ: `Product`):
 
-1. **Bước 1 (Domain)**: Tạo `ProductEntity.java` trong `modules/product/domain/entity/`.
+1. **Bước 1 (Domain)**: Tạo `ProductEntity.java` trong `modules/product/domain/entity/` kế thừa `BaseEntity`.
 2. **Bước 2 (Infrastructure)**: Tạo `ProductRepository.java` trong `modules/product/infrastructure/` kế thừa `BaseRepositoryImpl<ProductEntity, Long>`.
-3. **Bước 3 (API DTOs)**: Tạo `ProductCreateRequest`, `ProductUpdateRequest`, `ProductResponse` trong `modules/product/api/dto/`.
-4. **Bước 4 (Application)**: Tạo `ProductService.java` trong `modules/product/application/` xử lý CRUD & `QueryBuilder`.
-5. **Bước 5 (API Controller)**: Tạo `ProductCtl.java` trong `modules/product/api/` kế thừa `BaseCtl`.
-6. **Bước 6 (Flyway SQL)**: Thêm file tạo bảng `database/<db_type>/V<N>__init_<module>.sql`.
+3. **Bước 3 (API DTOs)**: Tạo `ProductCreateRequest`, `ProductUpdateRequest` (gắn validation annotations) và `ProductResponse` trong `modules/product/api/dto/`.
+4. **Bước 4 (Application)**: Tạo `ProductService.java` trong `modules/product/application/` xử lý CRUD & `QueryBuilder` với `@Transactional`.
+5. **Bước 5 (API Controller)**: Tạo `ProductCtl.java` trong `modules/product/api/` kế thừa `BaseCtl`, gắn `@Valid` tại các endpoint nhận body.
+6. **Bước 6 (Flyway SQL)**: Thêm file tạo bảng `database/<db_type>/V<N>__init_<module>.sql` đồng bộ cho 5 loại DB (`sqlite`, `postgresql`, `mysql`, `oracle`, `sqlserver`) kèm các cột audit chuẩn (bắt buộc tra cứu DDL Type Mapping tại `BASE_FRAMEWORK_GUIDE.md` mục 5.3).
 7. **Bước 7 (Unit Test)**: Thêm bài test tại `src/test/java/vn/org/thn/app/modules/product/ProductServiceTest.java`.
 
 ---
@@ -188,7 +191,8 @@ Khi cần phát triển một Microservice Module mới (Ví dụ: `Product`):
 >
 > 1. **Định Vị Package**: Mọi class nghiệp vụ mới **phải nằm trong `vn.org.thn.app.modules.<module_name>.*`**. Tuyệt đối không tạo package lẻ ở ngoài root hoặc trong package `demo`.
 > 2. **Tái Sử Dụng Base Core**: Không tự tạo lại `ApiResponse`, `PageResponse`, `JsonUtils`, `BaseException`, hay `GlobalExceptionHandler`. Bắt buộc `import` từ `vn.org.thn.app.base.*`.
-> 3. **Cú Pháp QueryBuilder**: Khi thực hiện truy vấn DB, sử dụng Method Reference dạng `eq(Entity::getFieldName, value)` thay vì truyền String cứng.
-> 4. **Tài Liệu Swagger**: Mọi REST Controller mới khởi tạo phải có đầy đủ chú thích `@Tag`, `@Operation`, và `@ApiResponses`.
-> 5. **Kiểm Thử Độc Lập**: Mỗi module tạo mới phải đi kèm file Unit Test tương ứng trong `src/test/java/vn/org/thn/app/modules/<module_name>/`.
-> 6. **Custom MyBatis XML Mappers**: Khi viết SQL phức tạp hoặc báo cáo JOIN nhiều bảng, tạo file XML tại `mapper/<Module>CustomMapper.xml`, tạo Interface `@Mapper` tại `modules/<name>/infrastructure/mapper/` và gọi thông qua `mapper(CustomMapper.class)` trong Repository.
+> 3. **Cú Pháp QueryBuilder**: Khi thực hiện truy vấn DB, sử dụng Method Reference dạng `eq(Entity::getFieldName, value)` thay vì truyền String cứng. Cả `UpdateBuilder` và `DeleteBuilder` bắt buộc có điều kiện `WHERE`. Đối với tính năng tìm kiếm từ khóa, ưu tiên dùng `likeAnyOrder` hoặc `likeAnyOrderUnaccent` kết hợp `@Unaccent`.
+> 4. **Chuẩn Hóa Controller & Validation**: Mọi REST Controller mới phải kế thừa `BaseCtl`, có đầy đủ `@Tag`, `@Operation`, và bắt buộc dùng `@Valid` kiểm tra dữ liệu đầu vào.
+> 5. **Hỗ Trợ Đa CSDL & Chuẩn Hóa BaseEntity**: Mọi bảng nghiệp vụ mới bắt buộc kế thừa `BaseEntity` và có file migration SQL đồng bộ cho cả 5 loại DB (`sqlite`, `postgresql`, `mysql`, `oracle`, `sqlserver`) kèm đủ 5 cột audit. Luôn tận dụng cơ chế Auto-Audit tự động của `save()` / `saveAll()`, tuyệt đối không viết code gán ngày giờ hoặc người tạo thủ công trong Service.
+> 6. **Kiểm Thử Độc Lập**: Mỗi module tạo mới phải đi kèm file Unit Test tương ứng trong `src/test/java/vn/org/thn/app/modules/<module_name>/`.
+> 7. **Custom MyBatis XML Mappers**: Khi viết SQL phức tạp hoặc báo cáo JOIN nhiều bảng, tạo file XML tại `mapper/<Module>CustomMapper.xml`, tạo Interface `@Mapper` tại `modules/<name>/infrastructure/mapper/` và gọi thông qua `mapper(CustomMapper.class)` trong Repository.

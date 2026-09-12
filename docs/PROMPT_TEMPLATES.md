@@ -25,7 +25,7 @@ Hãy tạo cho anh module <Tên_Module> (ví dụ: Product) theo đúng quy chu�
   + productName (String, Bắt buộc)
   + price (Double)
   + status (String: ACTIVE, INACTIVE)
-- Cần đầy đủ Flyway migration, Entity, Repository, DTOs, Service, Controller kế thừa BaseCtl (có Swagger) và Unit Test.
+- Cần đầy đủ Flyway migration đồng bộ cho 5 loại DB (SQLite, PostgreSQL, MySQL, SQL Server, Oracle có đủ 5 cột audit), Entity kế thừa BaseEntity (tận dụng Auto-Audit tự động của framework, không set ngày giờ thủ công), Repository, DTOs (gắn Jakarta Validation annotations), Service (@Transactional), Controller kế thừa BaseCtl (có @Valid, Swagger) và Unit Test.
 ```
 
 ### Mẫu 1.2: Tạo Module Nghiệp Vụ Phức Tạp (Nhiều trạng thái & Quan hệ)
@@ -40,9 +40,9 @@ Hãy tạo cho anh module Order quản lý đơn hàng theo đúng chuẩn AGENT
   + status (PENDING, PROCESSING, COMPLETED, CANCELLED)
   + note (String)
 - Luồng xử lý trong OrderService:
-  + API tạo đơn: Bắt buộc dùng @Transactional, tự động tính tổng tiền và sinh orderCode.
+  + API tạo đơn: Bắt buộc dùng @Transactional, tự động tính tổng tiền và sinh orderCode. Tận dụng Auto-Audit của BaseEntity khi gọi save().
   + API chuyển trạng thái đơn hàng: Kiểm tra logic hợp lệ (ví dụ: Đơn đã COMPLETED thì không thể CANCELLED).
-- Đi kèm đầy đủ Flyway migration SQL (SQLite & Postgres), Controller, Swagger docs và Unit Test suite.
+- Đi kèm đầy đủ Flyway migration SQL (cho cả 5 loại DB: SQLite, PostgreSQL, MySQL, SQL Server, Oracle có đầy đủ 5 cột audit BaseEntity), Controller, Swagger docs và Unit Test suite.
 ```
 
 ---
@@ -68,6 +68,23 @@ Trong module Order, hãy viết API hủy đơn hàng (POST /public/order/{id}/c
   3. Cập nhật status = CANCELLED và ghi chú lý do hủy.
 ```
 
+### Mẫu 2.3: Thêm API Tìm Kiếm Đa Từ Bất Kể Thứ Tự & Không Dấu (Smart Search)
+```text
+Trong module <Tên_Module> (ví dụ: User), hãy xây dựng API tìm kiếm thông minh không phân biệt thứ tự từ và không dấu tiếng Việt:
+- Endpoint: GET /public/<module>/smart-search (keyword, page, size)
+- Quy trình triển khai:
+  1. Thêm cột <field>_unaccent và đánh index trong CSDL qua Flyway migration cho 5 DB (sqlite, postgresql, mysql, sqlserver, oracle).
+  2. Trong Entity, khai báo trường unaccent tương ứng với annotation @Unaccent:
+     @Column(name = "full_name_unaccent")
+     @Unaccent(from = "fullName")
+     private String fullNameUnaccent;
+     (Base Framework sẽ tự động đồng bộ giá trị không dấu khi insert/update).
+  3. Trong Service, sử dụng QueryBuilder với likeAnyOrderUnaccent:
+     query.likeAnyOrderUnaccent(UserEntity::getFullNameUnaccent, keyword);
+     (hoặc dùng likeAnyOrder nếu tìm kiếm có dấu nhưng không phụ thuộc thứ tự từ).
+  4. Viết Unit Test kiểm thử các trường hợp hoán vị từ ("Nghĩa Trương Hiếu" -> "Trương Hiếu Nghĩa"), không dấu ("truong hieu nghia"), hoa/thường.
+```
+
 ---
 
 ## 3. Cập Nhật CSDL & Migration (Database Migration)
@@ -75,9 +92,9 @@ Trong module Order, hãy viết API hủy đơn hàng (POST /public/order/{id}/c
 ### Mẫu 3.1: Thêm Trường Mới Vào Bảng Đã Tồn Tại
 ```text
 Anh cần thêm trường phone_number (String, độ dài 20) vào bảng tbl_user:
-1. Tạo file Flyway migration mới: database/sqlite/V3__add_phone_number_to_user.sql (và bổ sung cho postgresql/mysql).
+1. Tạo file Flyway migration mới đồng bộ cho 5 loại database: database/<db_type>/V3__add_phone_number_to_user.sql (sqlite, postgresql, mysql, sqlserver, oracle).
 2. Cập nhật UserEntity (gắn @Column(name = "phone_number")).
-3. Cập nhật UserCreateRequest, UserUpdateRequest, UserResponse.
+3. Cập nhật UserCreateRequest, UserUpdateRequest, UserResponse (kèm validation).
 4. Cập nhật UserService và các bài Unit Test liên quan.
 ```
 

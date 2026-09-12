@@ -182,6 +182,28 @@ Double maxPrice = productRepository.query().max(Product::getPrice);
 Double avgPrice = productRepository.query().avg(Product::getPrice);
 ```
 
+#### f) Tìm Kiếm Đa Từ Bất Kể Thứ Tự (Order-Independent Search)
+Framework hỗ trợ 2 phương thức tìm kiếm chuỗi linh hoạt khi người dùng nhập từ khóa theo bất kỳ thứ tự nào:
+
+1. **`likeAnyOrder(Entity::getField, keyword)`**:
+   - Tự động tách từ khóa theo khoảng trắng và sinh điều kiện `AND` kết hợp `LOWER()` trên cột gốc (không phân biệt hoa/thường).
+   - Ví dụ: Dữ liệu trong CSDL là `"Trương Hiếu Nghĩa"`. Người dùng gõ `"HIếu Nghĩa Trương"`, `"Nghĩa Trương Hiếu"`, hay `"Trương Nghĩa"` đều tìm thấy chính xác!
+   ```java
+   List<UserEntity> list = userRepository.query()
+       .likeAnyOrder(UserEntity::getFullName, "HIếu Nghĩa Trương")
+       .list();
+   ```
+
+2. **`likeAnyOrderUnaccent(Entity::getUnaccentField, keyword)`**:
+   - Tự động chuyển đổi từ khóa người dùng sang không dấu, tách từ và sinh điều kiện `AND` trên cột unaccent.
+   - Hỗ trợ người dùng gõ tiếng Việt **CÓ DẤU** lẫn **KHÔNG DẤU** mà vẫn tìm ra kết quả:
+   ```java
+   // Người dùng gõ "hieu nghia truong" hoặc "truong nghia"
+   List<UserEntity> list = userRepository.query()
+       .likeAnyOrderUnaccent(UserEntity::getFullNameUnaccent, "hieu nghia truong")
+       .list();
+   ```
+
 ---
 
 ### 2.4 Thêm / Cập Nhật Dữ Liệu (`Save` & `Upsert`)
@@ -229,6 +251,11 @@ int deletedCount = productRepository.delete()
     .eq(Product::getStatus, "DELETED")
     .execute();
 ```
+
+> [!CAUTION]
+> **Quy tắc an toàn dữ liệu (Safety First):**
+> Cả `UpdateBuilder` và `DeleteBuilder` **bắt buộc phải có ít nhất một điều kiện WHERE**. 
+> Nếu gọi `.execute()` mà không có điều kiện nào, hệ thống sẽ ngay lập tức ném ra ngoại lệ `IllegalStateException("Cannot execute UPDATE/DELETE without WHERE condition")` nhằm ngăn ngừa việc sửa/xóa nhầm toàn bộ dữ liệu của bảng. Tuyệt đối không bọc nuốt lỗi này bằng silent try-catch.
 
 ---
 
@@ -319,6 +346,77 @@ Phù hợp cho các câu SQL rất dài, báo cáo phức tạp, hoặc sử d�
 
 ---
 
+### 2.8 Tự Động Hóa Chuẩn Hóa Cột Không Dấu Với `@Unaccent`
+Khi một bảng cần cột lưu chuỗi không dấu phục vụ tìm kiếm tiếng Việt toàn diện, khai báo annotation `@Unaccent(from = "sourceFieldName")` trên trường đích:
+
+```java
+package vn.org.thn.app.modules.user.domain.entity;
+
+import lombok.Data;
+import vn.org.thn.app.base.core.entity.BaseEntity;
+import vn.org.thn.app.base.persistence.annotation.*;
+
+@Data
+@Entity
+@Table(name = "tbl_user")
+public class UserEntity extends BaseEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "full_name")
+    private String fullName;
+
+    @Unaccent(from = "fullName")
+    @Column(name = "full_name_unaccent")
+    private String fullNameUnaccent;
+}
+```
+
+- **Nguyên lý hoạt động**:
+  - Khi gọi `repository.save(user)` (tạo mới hoặc cập nhật) hoặc `repository.saveAll(userList)`:
+  - Framework sẽ tự động đọc giá trị từ `fullName` $\rightarrow$ gọi `StringUtils.toUnaccent()` $\rightarrow$ tự động gán vào `fullNameUnaccent` trước khi lưu vào CSDL.
+  - Lập trình viên **không cần viết code thủ công** để set giá trị cho trường unaccent.
+
+---
+
+### 2.9 Chuẩn Hóa `BaseEntity` & Cơ Chế Tự Động Hóa Audit (Auto-Audit)
+
+Mọi Entity bảng nghiệp vụ trong dự án bắt buộc kế thừa lớp trừu tượng `BaseEntity`:
+
+```java
+@Data
+public abstract class BaseEntity {
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private String createdBy;
+    private String updatedBy;
+    private boolean deleted = false;
+}
+```
+
+#### a) Cơ Chế Hoạt Động Của Auto-Audit
+Khi gọi `repository.save(entity)` hoặc `repository.saveAll(entities)`, `InsertExecutor` và `BatchInsertExecutor` tự động quản lý các trường audit:
+1. **Khi INSERT**:
+   - `createdAt`: Tự động điền `LocalDateTime.now()` (nếu đang null).
+   - `updatedAt`: Tự động gán bằng `createdAt` (nếu đang null).
+   - `createdBy`: Lấy từ `UserContext.getCurrentUser()`. Nếu chưa có user trong context, tự động fallback về `"system"`.
+   - `updatedBy`: Gán bằng `createdBy`.
+   - `deleted`: Mặc định là `false`.
+2. **Khi UPDATE**:
+   - `updatedAt`: Tự động cập nhật thành thời điểm hiện tại `LocalDateTime.now()`.
+   - `updatedBy`: Tự động cập nhật thành user hiện tại từ `UserContext`.
+   - **Bảo toàn vết tạo lập ban đầu**: Các cột `created_at` và `created_by` được tự động loại bỏ khỏi câu lệnh `UPDATE ... SET ...` để không bao giờ bị ghi đè hay mất dữ liệu khởi tạo.
+
+#### b) Quản Lý Ngữ Cảnh Người Dùng (`UserContext`)
+- `UserContext` quản lý danh tính người dùng qua `ThreadLocal<String>`.
+- `RequestContextFilter` tự động trích xuất các header `X-User-Id`, `X-Username`, hoặc `username` từ HTTP request và nạp vào `UserContext.setCurrentUser(...)`.
+- Khi kết thúc request, `RequestContextFilter` dọn dẹp an toàn tại `finally { UserContext.clear(); }`.
+- Trong Service hoặc background job, lập trình viên hoàn toàn không cần gọi `setCreatedAt(...)` hay `setUpdatedAt(...)` thủ công.
+
+---
+
 ## 3. Phân Hệ Web Core & Controller
 
 ### 3.1 Controller Kế Thừa `BaseCtl`
@@ -388,12 +486,46 @@ if (product == null) {
 }
 ```
 
+### 3.4 Xác Thực Dữ Liệu Đầu Vào (Bean Validation - JSR-380)
+Hệ thống sử dụng chuẩn **Jakarta Bean Validation (JSR-380)** kết hợp với `GlobalExceptionHandler`:
+- **Tại Request DTO**: Khai báo các annotation kiểm tra dữ liệu như `@NotBlank`, `@NotNull`, `@Size`, `@Email`, `@Pattern`, `@Min`, `@Max` kèm `message` rõ ràng.
+- **Tại Controller**: Bắt buộc gắn `@Valid` trước `@RequestBody`.
+- **Xử lý ngoại lệ**: Khi dữ liệu không thỏa mãn, Spring sẽ ném `MethodArgumentNotValidException`. `GlobalExceptionHandler` sẽ tự động bắt và trả về `ApiResponse` có `code: "VAL_001"` kèm chi tiết lỗi validation.
+
+Ví dụ:
+```java
+public class UserCreateRequest {
+    @NotBlank(message = "Username is required")
+    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
+    private String username;
+
+    @NotBlank(message = "Email is required")
+    @Email(message = "Email should be valid")
+    private String email;
+}
+
+@PostMapping
+public ResponseEntity<ApiResponse<UserResponse>> create(@Valid @RequestBody UserCreateRequest request) {
+    return ok(userService.createUser(request));
+}
+```
+
+### 3.5 Ghi Log Request An Toàn (`RequestContextFilter`)
+`RequestContextFilter` tự động quản lý vòng đời HTTP request:
+- **MDC Tracking**: Tự động sinh hoặc kế thừa `X-Request-Id` (UUID) và đưa vào Logback MDC để theo dõi vết log xuyên suốt.
+- **Tự động Masking**: Tự động nhận diện và che giấu các trường nhạy cảm trong JSON body (như `password`, `accessToken`, `token`, `secret`, `authorization`) trước khi ghi log.
+- **Bỏ qua ghi body file nhị phân**: Tự động phát hiện và bỏ qua việc cache/ghi body đối với các request tải file hoặc dữ liệu nhị phân (như `/export`, `multipart/form-data`) để tránh tràn bộ nhớ log.
+
 ---
 
 ## 4. Phân Hệ Đa Ngôn Ngữ i18n
 
-Dự án có sẵn service quản lý dịch đa ngôn ngữ đồng bộ giữa DB và JSON file.
-- **Service**: `LanguageService`
+Dự án có sẵn service quản lý dịch đa ngôn ngữ đồng bộ giữa DB và JSON file (`LanguageService`).
+- **Khởi tạo & Đồng bộ Ngôn ngữ thông minh (Startup Batch Ingestion)**: Khi ứng dụng khởi chạy, `LanguageService.loadLanguage()` sẽ:
+  1. Đọc toàn bộ các file `lang/*.json` vào bộ nhớ đệm (Cache).
+  2. Tải danh sách các cặp khóa ngôn ngữ hiện có trong CSDL lên bộ nhớ đệm để đối soát (Smart Diffing).
+  3. Chỉ trích xuất các bản ghi dịch thực sự còn thiếu trong CSDL và thực hiện lưu hàng loạt (**Batch Insert bằng `saveAll()`**).
+  - *Lợi ích*: Tránh lỗi trùng lặp khóa chính (PK Collision), tăng tốc độ khởi động ứng dụng vượt bậc và không ghi đè dữ liệu dịch tùy biến trên CSDL.
 - **Tải danh sách ngôn ngữ**: `languageService.loadLanguage()`
 - **Cập nhật key dịch**: `languageService.updateLanguage(request)`
 
@@ -401,26 +533,159 @@ Dự án có sẵn service quản lý dịch đa ngôn ngữ đồng bộ giữa
 
 ## 5. Cấu Hình Đa CSDL & Flyway Migration
 
-### 5.1 Cấu Hình Database trong `application.yaml`
-Cấu hình trong file [application.yaml](file:///Volumes/Data/04.MyProject/java-project/app-service/src/main/resources/application.yaml):
-
-```yaml
-base:
-  database:
-    type: SQLITE              # Lựa chọn: SQLITE / POSTGRESQL / MYSQL / SQLSERVER / ORACLE
-    db-name: app_db           # Tên CSDL
-    sql-log: BASIC            # Log SQL: OFF / BASIC / FULL
-```
+### 5.1 Cấu Hình Môi Trường & Database Theo Spring Profiles
+Hệ thống phân tách cấu hình theo mô hình đa môi trường (Spring Boot Profiles):
+- **`application.yaml`**: Cấu hình chung toàn hệ thống (Multipart, Swagger Docs, format log, i18n) và kích hoạt profile mặc định:
+  ```yaml
+  spring:
+    profiles:
+      active: dev
+  ```
+- **`application-dev.yaml`** (Môi trường Phát triển - Dev):
+  - Database: `SQLITE` (`file-name: dev_app.db`), `dbPrefix: dev`
+  - Log SQL: `FULL` (hiển thị chi tiết toàn bộ SQL và tham số bind)
+  - Log level: `vn.org.thn.app: DEBUG`
+- **`application-test.yaml`** (Môi trường Kiểm thử tự động / CI):
+  - Database: `SQLITE` (`file-name: test_app.db`), `dbPrefix: test`
+  - Log SQL: `BASIC`, port: `0` (random port)
+- **`application-staging.yaml`** (Môi trường Thử nghiệm / UAT / Pre-prod):
+  - Database: `POSTGRESQL` / `MYSQL`, `dbPrefix: staging`
+  - Log SQL: `BASIC`, Pool size: `10`
+- **`application-prod.yaml`** (Môi trường Vận hành thực tế - Production):
+  - Database: `POSTGRESQL` / `MYSQL` / `ORACLE`, `dbPrefix: prod`
+  - Log SQL: `OFF` (tắt SQL log để tối đa hóa hiệu năng và bảo mật)
+  - Pool size: `20` (tối ưu tải cao)
+  - Swagger UI: Tắt công khai trên Production (`enabled: false`)
 
 ### 5.2 Quy Trình Quản Lý Script Migration (Flyway)
 Mọi thay đổi cấu trúc CSDL (tạo bảng, thêm cột, index) đều được tự động thực thi bởi Flyway khi ứng dụng khởi chạy (`DatabaseInitializer`).
 
-- **Thư mục lưu trữ**: Đặt trong `database/<db_type>/` (Ví dụ: `database/sqlite/`, `database/postgresql/`, `database/mysql/`).
+- **Thư mục lưu trữ**: Đặt trong `database/<db_type>/` (Hỗ trợ 5 loại: `sqlite/`, `postgresql/`, `mysql/`, `oracle/`, `sqlserver/`).
 - **Quy tắc đặt tên file**: `V<Version>__<Mo_Ta_Cau_Truc>.sql` (chú ý **2 dấu gạch dưới `__`**).
 - **Ví dụ**:
   - `database/sqlite/V1__init.sql`
   - `database/sqlite/V2__init_user.sql`
   - `database/postgresql/V2__init_user.sql`
+  - `database/mysql/V2__init_user.sql`
+  - `database/oracle/V2__init_user.sql`
+  - `database/sqlserver/V2__init_user.sql`
+
+### 5.3 Chuẩn Bảng CSDL Kế Thừa `BaseEntity` & Quy Tắc DDL 5 Loại Database
+
+#### a) Cơ chế ORM Reflection đối với `BaseEntity`
+- Lớp `BaseEntity` chứa 5 trường audit: `createdAt`, `updatedAt`, `createdBy`, `updatedBy`, và `deleted` (default `false`).
+- Trong `EntityParser.java`, framework sử dụng `FieldUtils.getAllFieldsList(clazz)` để quét **toàn bộ các trường của cả Entity con lẫn lớp cha `BaseEntity`**.
+- Do đó, ORM sẽ tự động coi 5 cột này luôn tồn tại trong các câu lệnh `INSERT`, `UPDATE`, `SELECT`. **Nếu câu lệnh `CREATE TABLE` thiếu bất kỳ cột nào, hệ thống sẽ ném lỗi `SQLException: column does not exist`**.
+- Ngoài ra, `BaseEntity` **cố tình không chứa trường `id`** (để Entity con linh hoạt chọn kiểu ID). Do đó, câu lệnh DDL của Entity con phải tự định nghĩa cột khóa chính phù hợp với từng hệ CSDL.
+
+#### b) Bảng Tra Cứu Kiểu Dữ Liệu Chuẩn (DDL Type Mapping Cheat Sheet)
+
+| Cột trong Entity | Java Type | SQLite | PostgreSQL | MySQL | SQL Server | Oracle |
+|---|---|---|---|---|---|---|
+| `id` (Khóa chính) | `Long` | `INTEGER PRIMARY KEY AUTOINCREMENT` | `BIGSERIAL PRIMARY KEY` | `BIGINT AUTO_INCREMENT PRIMARY KEY` | `BIGINT IDENTITY(1,1) PRIMARY KEY` | `NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY` |
+| `created_at` | `LocalDateTime` | `TEXT` hoặc `TIMESTAMP` | `TIMESTAMP` | `DATETIME` | `DATETIME2` | `TIMESTAMP` |
+| `updated_at` | `LocalDateTime` | `TEXT` hoặc `TIMESTAMP` | `TIMESTAMP` | `DATETIME` | `DATETIME2` | `TIMESTAMP` |
+| `created_by` | `String` | `TEXT` | `VARCHAR(50)` | `VARCHAR(50)` | `NVARCHAR(50)` | `VARCHAR2(50)` |
+| `updated_by` | `String` | `TEXT` | `VARCHAR(50)` | `VARCHAR(50)` | `NVARCHAR(50)` | `VARCHAR2(50)` |
+| `deleted` | `boolean` (false) | `BOOLEAN DEFAULT 0` | `BOOLEAN DEFAULT FALSE` | `TINYINT(1) DEFAULT 0` | `BIT DEFAULT 0` | `NUMBER(1) DEFAULT 0` |
+
+> [!WARNING]
+> **Lưu ý đặc thù hệ CSDL:**
+> 1. **Oracle** KHÔNG có kiểu `BOOLEAN` $\rightarrow$ Bắt buộc dùng `NUMBER(1) DEFAULT 0`.
+> 2. **SQL Server** KHÔNG có kiểu `BOOLEAN` $\rightarrow$ Bắt buộc dùng `BIT DEFAULT 0`.
+> 3. **PostgreSQL** dùng `TIMESTAMP` thay vì `DATETIME`. Khóa chính tự tăng dùng `BIGSERIAL` hoặc `GENERATED ALWAYS AS IDENTITY`.
+
+#### c) Bộ Mẫu DDL Tham Khảo Chuẩn Cho 5 Loại Database (Ví dụ bảng `tbl_product`)
+
+**1. SQLite** (`database/sqlite/V<N>__init_product.sql`):
+```sql
+CREATE TABLE IF NOT EXISTS tbl_product
+(
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_name TEXT NOT NULL,
+    price        REAL,
+    status       TEXT DEFAULT 'ACTIVE',
+    created_at   TEXT,
+    updated_at   TEXT,
+    created_by   TEXT,
+    updated_by   TEXT,
+    deleted      BOOLEAN DEFAULT 0
+);
+```
+
+**2. PostgreSQL** (`database/postgresql/V<N>__init_product.sql`):
+```sql
+CREATE TABLE IF NOT EXISTS tbl_product
+(
+    id           BIGSERIAL PRIMARY KEY,
+    product_name VARCHAR(255) NOT NULL,
+    price        NUMERIC(15, 2),
+    status       VARCHAR(50) DEFAULT 'ACTIVE',
+    created_at   TIMESTAMP,
+    updated_at   TIMESTAMP,
+    created_by   VARCHAR(50),
+    updated_by   VARCHAR(50),
+    deleted      BOOLEAN DEFAULT FALSE
+);
+```
+
+**3. MySQL** (`database/mysql/V<N>__init_product.sql`):
+```sql
+CREATE TABLE IF NOT EXISTS tbl_product
+(
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_name VARCHAR(255) NOT NULL,
+    price        DECIMAL(15, 2),
+    status       VARCHAR(50) DEFAULT 'ACTIVE',
+    created_at   DATETIME,
+    updated_at   DATETIME,
+    created_by   VARCHAR(50),
+    updated_by   VARCHAR(50),
+    deleted      TINYINT(1) DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**4. SQL Server** (`database/sqlserver/V<N>__init_product.sql`):
+```sql
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tbl_product' AND xtype='U')
+CREATE TABLE tbl_product
+(
+    id           BIGINT IDENTITY(1,1) PRIMARY KEY,
+    product_name NVARCHAR(255) NOT NULL,
+    price        DECIMAL(15, 2),
+    status       NVARCHAR(50) DEFAULT 'ACTIVE',
+    created_at   DATETIME2,
+    updated_at   DATETIME2,
+    created_by   NVARCHAR(50),
+    updated_by   NVARCHAR(50),
+    deleted      BIT DEFAULT 0
+);
+```
+
+**5. Oracle** (`database/oracle/V<N>__init_product.sql`):
+```sql
+DECLARE
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'TBL_PRODUCT';
+    IF v_count = 0 THEN
+        EXECUTE IMMEDIATE '
+        CREATE TABLE tbl_product
+        (
+            id           NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            product_name VARCHAR2(255) NOT NULL,
+            price        NUMBER(15, 2),
+            status       VARCHAR2(50) DEFAULT ''ACTIVE'',
+            created_at   TIMESTAMP,
+            updated_at   TIMESTAMP,
+            created_by   VARCHAR2(50),
+            updated_by   VARCHAR2(50),
+            deleted      NUMBER(1) DEFAULT 0
+        )';
+    END IF;
+END;
+/
+```
 
 ---
 

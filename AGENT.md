@@ -40,17 +40,27 @@ Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **b�
 - Bắt buộc `import` và tái sử dụng từ `vn.org.thn.app.base.*`.
 - **TUYỆT ĐỐI KHÔNG** tự ý sửa đổi code trong package `vn.org.thn.app.base.*` trừ khi có yêu cầu nâng cấp framework từ người dùng.
 
-### ⚡ Điều 3: Cú Pháp QueryBuilder Type-Safe
+### ⚡ Điều 3: Cú Pháp QueryBuilder Type-Safe & An Toàn
 - Khi truy vấn dữ liệu CSDL qua Repository, **bắt buộc dùng Method Reference** `eq(Entity::getFieldName, value)` thay vì truyền tên cột dạng String cứng.
 - Ví dụ: `userRepository.query().eq(UserEntity::getUsername, "admin").one();`
+- **Tìm kiếm đa từ & không dấu**: Khi tìm kiếm theo từ khóa người dùng, sử dụng `likeAnyOrder(Entity::getField, keyword)` cho cột gốc, hoặc `likeAnyOrderUnaccent(Entity::getUnaccentField, keyword)` kết hợp annotation `@Unaccent(from = "...")` trên entity.
+- **An toàn dữ liệu**: Cả `UpdateBuilder` và `DeleteBuilder` **bắt buộc phải có điều kiện `WHERE`**. Không bao giờ được gọi `.execute()` mà không có điều kiện lọc.
 
-### ⚡ Điều 4: Chuẩn Hóa Controller & Swagger Docs
+### ⚡ Điều 4: Chuẩn Hóa Controller, Swagger Docs & Bean Validation
 - Mọi REST Controller **phải kế thừa `BaseCtl`** và trả về kết quả qua `ok(...)` hoặc `fail(...)`.
 - Bắt buộc gắn đầy đủ chú thích OpenAPI Swagger: `@Tag(name = "...")` và `@Operation(summary = "...")`.
+- Mọi Request DTO nhận dữ liệu từ client **bắt buộc khai báo các Jakarta Validation annotations** (`@NotBlank`, `@NotNull`, `@Size`, `@Email`...) và Controller phải gắn `@Valid` trước `@RequestBody`.
 
-### ⚡ Điều 5: Quản Lý CSDL Bằng Flyway Migration
+### ⚡ Điều 5: Quản Lý CSDL Bằng Flyway Migration Đa Nền Tảng
 - Mọi thay đổi bảng hoặc cột CSDL phải có file migration SQL tương ứng trong `database/<db_type>/V<N>__<description>.sql` (Ví dụ: `database/sqlite/V2__init_user.sql`).
-- Chú ý tên file phải chứa 2 dấu gạch dưới `__`.
+- **Hỗ trợ 5 loại DB**: Phải tạo đồng bộ script cho cả 5 database: `sqlite`, `postgresql`, `mysql`, `oracle`, `sqlserver`.
+- **Chuẩn Hóa BaseEntity & 5 Cột Audit**: Tất cả các bảng nghiệp vụ (Business Tables) **bắt buộc kế thừa `BaseEntity`** và có đủ 5 cột audit chuẩn (`created_at`, `updated_at`, `created_by`, `updated_by`, `deleted`). (Ngoại lệ duy nhất là các bảng ghi log append-only hoặc bảng liên kết M:N thuần túy).
+- **Cơ Chế Auto-Audit Tự Động**: Khi gọi `save()` hoặc `saveAll()`, Base Framework tự động điền `createdAt`, `updatedAt`, `createdBy` (lấy từ `UserContext` hoặc fallback `"system"`), `updatedBy`, và `deleted = false`. Khi UPDATE, framework tự động cập nhật `updatedAt`/`updatedBy` và bảo vệ không ghi đè `createdAt`/`createdBy`. Lập trình viên và AI Agent **không cần gán tay các trường audit trong Service**.
+- **Tra cứu DDL Type Mapping**: Bắt buộc tra cứu bảng kiểu dữ liệu tại `BASE_FRAMEWORK_GUIDE.md` mục 5.3:
+  - Oracle: Dùng `NUMBER(1) DEFAULT 0` cho cột `deleted` và `NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY` cho ID. Tuyệt đối không dùng `BOOLEAN`.
+  - SQL Server: Dùng `BIT DEFAULT 0` cho cột `deleted` và `IDENTITY(1,1)` cho ID. Tuyệt đối không dùng `BOOLEAN`.
+  - PostgreSQL: Dùng `TIMESTAMP` và `BOOLEAN DEFAULT FALSE`.
+  - MySQL: Dùng `DATETIME` và `TINYINT(1) DEFAULT 0`.
 
 ### ⚡ Điều 6: Custom MyBatis XML Mappers
 - Khi cần viết câu SQL phức tạp, báo cáo, hoặc JOIN nhiều bảng:
@@ -64,7 +74,7 @@ Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **b�
 ### ⚡ Điều 8: Thực Thi Lệnh Xác Minh Sau Khi Viết Code
 - Sau khi chỉnh sửa hoặc viết xong code, AI Agent **bắt buộc thực thi lệnh kiểm thử** và xác minh kết quả build thành công trước khi báo lại người dùng:
   ```bash
-  export JAVA_HOME=/usr/local/Cellar/openjdk@21/21.0.6/libexec/openjdk.jdk/Contents/Home && ./gradlew test --no-daemon
+  export JAVA_HOME=/Users/truonghieunghia/Library/Java/JavaVirtualMachines/azul-17.0.20.1/Contents/Home && ./gradlew test --no-daemon
   ```
 
 ---
@@ -77,6 +87,12 @@ Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **b�
 | Tự tạo lại class Response như `ResponseData`, `ResultDTO` | Dùng `ApiResponse<T>` từ `vn.org.thn.app.base.core.response.ApiResponse`. | Chuẩn hóa định dạng JSON đầu ra toàn hệ thống (`code`, `message`, `data`). |
 | Trả trực tiếp Entity CSDL ra REST Controller | Chuyển đổi Entity thành DTO Response tại tầng Application Service. | Đảm bảo tính bảo mật, tránh lộ cấu trúc DB và ngăn ngừa circular JSON reference. |
 | Nuốt ngoại lệ (silent try-catch) hoặc trả về null/empty khi lỗi | Ném `BusinessException(CommonErrorCode, "Thông báo lỗi")`. | `GlobalExceptionHandler` sẽ tự động bắt và trả về HTTP status + JSON error code rõ ràng. |
+| Gọi `update().execute()` hoặc `delete().execute()` không có `where` | Luôn xác định rõ điều kiện `.eq()`, `.in()`, v.v. trước khi gọi `.execute()`. | Ngăn chặn việc vô tình sửa/xóa nhầm toàn bộ dữ liệu trong bảng. |
+| Dùng vòng lặp `for` gọi `save()` từng bản ghi khi nạp dữ liệu lớn | Sử dụng `saveAll(list)` để thực hiện Batch Insert/Update. | Tránh overhead kết nối DB và tối ưu hóa thời gian thực thi gấp nhiều lần. |
+| Bỏ qua Jakarta Validation trên Request DTO | Khai báo `@NotBlank`, `@Size`, `@Email`... trên DTO và `@Valid` trên Controller. | Ngăn chặn dữ liệu rác, lỗi SQL constraint từ tầng Web và trả về mã `VAL_001` chuẩn. |
+| Viết `deleted BOOLEAN` cho CSDL Oracle hoặc SQL Server | Dùng `NUMBER(1) DEFAULT 0` (Oracle) hoặc `BIT DEFAULT 0` (SQL Server). | Oracle và SQL Server không hỗ trợ kiểu dữ liệu BOOLEAN, migration sẽ bị lỗi ngay lập tức. |
+| Bỏ quên 5 cột của `BaseEntity` trong câu `CREATE TABLE` | Luôn thêm `created_at`, `updated_at`, `created_by`, `updated_by`, `deleted`. | `EntityParser` tự động quét thuộc tính lớp cha, nếu DB thiếu cột sẽ gây crash câu lệnh INSERT/UPDATE. |
+| Tự gán tay các trường audit (`setCreatedAt`, `setUpdatedAt`...) trong Service | Để `save()` và `saveAll()` của framework tự động điền qua cơ chế Auto-Audit của `BaseEntity`. | Tránh mã nguồn thừa thãi (boilerplate), đảm bảo tính nhất quán và bảo vệ dữ liệu audit gốc không bị ghi đè. |
 | Viết trực tiếp câu lệnh SQL dạng String trong Controller hoặc Service | Sử dụng `QueryBuilder` hoặc viết Custom MyBatis XML Mapper. | Đảm bảo tính đóng gói, dễ bảo trì và ngăn ngừa SQL Injection. |
 | Sửa đổi file `mapper/DynamicSQL.xml` | Tạo file mapper mới `mapper/<Module>CustomMapper.xml`. | `DynamicSQL.xml` là core engine của ORM framework. |
 
