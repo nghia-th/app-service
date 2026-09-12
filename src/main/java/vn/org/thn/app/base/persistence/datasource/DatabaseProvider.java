@@ -37,6 +37,22 @@ public interface DatabaseProvider {
         // no-op by default
     }
 
+    /**
+     * Guards against a malformed database name reaching a DDL statement built by string
+     * concatenation (e.g. {@code CREATE DATABASE "} + dbName + {@code "}) in an
+     * {@code ensureDatabaseExists} override - see the Low finding on {@code ensureDatabaseExists}
+     * (2026-09-12 review). {@code dbName} always comes from internal config
+     * ({@code base.database.db-prefix}/{@code base.database.db-name}), never end-user input, so
+     * this is defense in depth rather than a response to a known exploitable path.
+     */
+    default String validateDatabaseName(String dbName) {
+        if (dbName == null || !dbName.matches("[A-Za-z0-9_]+")) {
+            throw new IllegalStateException("Invalid database name '" + dbName
+                    + "' - only letters, digits and underscores are allowed (check base.database.db-prefix/db-name)");
+        }
+        return dbName;
+    }
+
     /** Engine-specific one-time setup run against a fresh DataSource (e.g. SQLite PRAGMAs). */
     void initialize(DataSource dataSource);
 }

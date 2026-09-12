@@ -67,7 +67,7 @@ public class PostgreSqlProvider implements DatabaseProvider {
      */
     @Override
     public void ensureDatabaseExists(DataSourceProperties dataSourceProperties) {
-        String dbName = databaseProperties.databaseName();
+        String dbName = validateDatabaseName(databaseProperties.databaseName());
         String adminUrl = urlPrefix() + "/postgres";
 
         try (Connection conn = DriverManager.getConnection(adminUrl, dataSourceProperties.getUsername(), dataSourceProperties.getPassword())) {

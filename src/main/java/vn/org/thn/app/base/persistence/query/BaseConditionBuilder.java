@@ -32,6 +32,19 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
 
     private static final AtomicLong COUNTER = new AtomicLong();
 
+    /**
+     * SQL LIKE wildcard characters ('%'/'_') in user-supplied search text used to be passed
+     * straight through unescaped, so a keyword containing either one silently changed the meaning
+     * of the search instead of being matched literally - see Medium finding #10 (2026-09-12
+     * review). Every LIKE fragment built below escapes both (and this escape character itself) in
+     * the user-supplied part of the pattern via {@link #escapeLikeWildcards} and declares it with
+     * an {@code ESCAPE} clause. '!' is used instead of the more common backslash because backslash
+     * is itself special inside a MySQL string literal (would need doubling to appear in the SQL
+     * text), while '!' is a plain, unescaped character in every supported dialect's string literal
+     * syntax and exceedingly unlikely to appear in a real search keyword anyway.
+     */
+    private static final char LIKE_ESCAPE_CHAR = '!';
+
     protected final Class<T> clazz;
     protected final EntityInfo info;
     protected final QueryExecutor queryExecutor;
@@ -66,6 +79,21 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
     @SuppressWarnings("unchecked")
     protected SELF self() {
         return (SELF) this;
+    }
+
+    /**
+     * Escapes '%', '_' and {@link #LIKE_ESCAPE_CHAR} itself in {@code value} so every LIKE fragment
+     * built below matches it literally, given the matching {@code ESCAPE} clause added alongside.
+     * Must be applied to the user-supplied part of a pattern only, before any wildcard '%'/'_' this
+     * class itself adds around it (a wildcard this class adds is meant literally as a wildcard, not
+     * escaped).
+     */
+    private static String escapeLikeWildcards(String value) {
+        String escapeChar = String.valueOf(LIKE_ESCAPE_CHAR);
+        return value
+                .replace(escapeChar, escapeChar + escapeChar)
+                .replace("%", escapeChar + "%")
+                .replace("_", escapeChar + "_");
     }
 
     /** Renders all accumulated WHERE fragments, joined by each fragment's own {@link QueryLogic} (AND/OR). */
@@ -165,12 +193,12 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
         return eq(fieldName(field), value);
     }
 
-    /** Adds a {@code field LIKE '%value%'} condition (AND-joined). No-op if {@code value} is null/blank. */
+    /** Adds a {@code field LIKE '%value%'} condition (AND-joined), with '%'/'_' in {@code value} escaped so they match literally rather than as wildcards - see {@link #escapeLikeWildcards}. No-op if {@code value} is null/blank. */
     public SELF like(String field, String value) {
         if (value == null || value.isBlank()) return self();
         String key = nextParam();
-        params.put(key, "%" + value + "%");
-        whereClauses.add(new QueryCondition(column(field) + " LIKE #{" + key + "}", QueryLogic.AND));
+        params.put(key, "%" + escapeLikeWildcards(value) + "%");
+        whereClauses.add(new QueryCondition(column(field) + " LIKE #{" + key + "} ESCAPE '" + LIKE_ESCAPE_CHAR + "'", QueryLogic.AND));
         return self();
     }
 
@@ -179,12 +207,12 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
         return like(fieldName(field), value);
     }
 
-    /** Adds a {@code field LIKE 'value%'} (prefix match) condition (AND-joined). No-op if {@code value} is null/blank. */
+    /** Adds a {@code field LIKE 'value%'} (prefix match) condition (AND-joined), with '%'/'_' in {@code value} escaped so they match literally rather than as wildcards - see {@link #escapeLikeWildcards}. No-op if {@code value} is null/blank. */
     public SELF startsWith(String field, String value) {
         if (value == null || value.isBlank()) return self();
         String key = nextParam();
-        params.put(key, value + "%");
-        whereClauses.add(new QueryCondition(column(field) + " LIKE #{" + key + "}", QueryLogic.AND));
+        params.put(key, escapeLikeWildcards(value) + "%");
+        whereClauses.add(new QueryCondition(column(field) + " LIKE #{" + key + "} ESCAPE '" + LIKE_ESCAPE_CHAR + "'", QueryLogic.AND));
         return self();
     }
 
@@ -193,12 +221,12 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
         return startsWith(fieldName(field), value);
     }
 
-    /** Adds a {@code field LIKE '%value'} (suffix match) condition (AND-joined). No-op if {@code value} is null/blank. */
+    /** Adds a {@code field LIKE '%value'} (suffix match) condition (AND-joined), with '%'/'_' in {@code value} escaped so they match literally rather than as wildcards - see {@link #escapeLikeWildcards}. No-op if {@code value} is null/blank. */
     public SELF endsWith(String field, String value) {
         if (value == null || value.isBlank()) return self();
         String key = nextParam();
-        params.put(key, "%" + value);
-        whereClauses.add(new QueryCondition(column(field) + " LIKE #{" + key + "}", QueryLogic.AND));
+        params.put(key, "%" + escapeLikeWildcards(value));
+        whereClauses.add(new QueryCondition(column(field) + " LIKE #{" + key + "} ESCAPE '" + LIKE_ESCAPE_CHAR + "'", QueryLogic.AND));
         return self();
     }
 
@@ -220,8 +248,8 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
         for (String token : tokens) {
             if (token.isBlank()) continue;
             String key = nextParam();
-            params.put(key, "%" + token + "%");
-            whereClauses.add(new QueryCondition("LOWER(" + col + ") LIKE LOWER(#{" + key + "})", QueryLogic.AND));
+            params.put(key, "%" + escapeLikeWildcards(token) + "%");
+            whereClauses.add(new QueryCondition("LOWER(" + col + ") LIKE LOWER(#{" + key + "}) ESCAPE '" + LIKE_ESCAPE_CHAR + "'", QueryLogic.AND));
         }
         return self();
     }
@@ -246,8 +274,8 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
         for (String token : tokens) {
             if (token.isBlank()) continue;
             String key = nextParam();
-            params.put(key, "%" + token + "%");
-            whereClauses.add(new QueryCondition(col + " LIKE #{" + key + "}", QueryLogic.AND));
+            params.put(key, "%" + escapeLikeWildcards(token) + "%");
+            whereClauses.add(new QueryCondition(col + " LIKE #{" + key + "} ESCAPE '" + LIKE_ESCAPE_CHAR + "'", QueryLogic.AND));
         }
         return self();
     }
@@ -350,7 +378,17 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
         return raw(sql, Map.of());
     }
 
-    /** Adds a raw, already-rendered SQL fragment as a WHERE condition (AND-joined), together with the bind parameters it references. Throws if {@code sql} is null/blank. */
+    /**
+     * Adds a raw, already-rendered SQL fragment as a WHERE condition (AND-joined), together with
+     * the bind parameters it references. Throws if {@code sql} is null/blank.
+     * <p>
+     * <b>Security note (Medium finding #11, 2026-09-12 review):</b> {@code sql} is spliced directly
+     * into the executed statement text (see {@link vn.org.thn.app.base.persistence.executor.NativeQueryExecutor}'s
+     * class doc for the same note on the underlying mechanism) - any value that must vary per call
+     * belongs in {@code values} as a {@code #{name}} placeholder, never concatenated into
+     * {@code sql} itself. Nothing currently in this codebase does that concatenation; this is an
+     * architecture flag for future PR review, not a report of an existing bug.
+     */
     public SELF raw(String sql, Map<String, Object> values) {
         if (sql == null || sql.isBlank()) {
             throw new IllegalArgumentException("sql must not be blank");

@@ -138,4 +138,44 @@ class QueryBuilderTest {
         assertTrue(builder.getParams().containsValue("%nghia%"));
         assertTrue(builder.getParams().containsValue("%truong%"));
     }
+
+    // --- Medium finding #10 (2026-09-12 review): LIKE wildcard characters in user-supplied search
+    // text must be escaped so they are matched literally, not treated as SQL wildcards. ---
+
+    @Test
+    @DisplayName("like() escapes literal '%' and '_' in the search value and adds an ESCAPE clause")
+    void like_valueContainsWildcardCharacters_escapesThem() {
+        QueryBuilder<Translate> builder = new QueryBuilder<>(Translate.class, translateEntityInfo, queryExecutor);
+        builder.like(Translate::getLangKey, "50%_off");
+
+        String sql = builder.toSql();
+        assertTrue(sql.contains("LIKE #{"));
+        assertTrue(sql.contains("ESCAPE '!'"));
+        assertTrue(builder.getParams().containsValue("%50!%!_off%"),
+                "the literal '%' and '_' in the keyword must be escaped with '!' before being wrapped in wildcard '%'s");
+    }
+
+    @Test
+    @DisplayName("startsWith()/endsWith() escape literal '%' and '_' in the search value")
+    void startsWithEndsWith_valueContainsWildcardCharacters_escapesThem() {
+        QueryBuilder<Translate> builder = new QueryBuilder<>(Translate.class, translateEntityInfo, queryExecutor);
+        builder.startsWith(Translate::getLangKey, "50%off")
+               .endsWith(Translate::getLang, "a_b");
+
+        String sql = builder.toSql();
+        assertTrue(sql.contains("ESCAPE '!'"));
+        assertTrue(builder.getParams().containsValue("50!%off%"));
+        assertTrue(builder.getParams().containsValue("%a!_b"));
+    }
+
+    @Test
+    @DisplayName("likeAnyOrder()/likeAnyOrderUnaccent() escape literal '%' and '_' in each token")
+    void likeAnyOrder_tokenContainsWildcardCharacters_escapesThem() {
+        QueryBuilder<Translate> builder = new QueryBuilder<>(Translate.class, translateEntityInfo, queryExecutor);
+        builder.likeAnyOrder(Translate::getValue, "100%_done");
+
+        String sql = builder.toSql();
+        assertTrue(sql.contains("ESCAPE '!'"));
+        assertTrue(builder.getParams().containsValue("%100!%!_done%"));
+    }
 }

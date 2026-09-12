@@ -79,11 +79,12 @@ public class LanguageService extends IBase {
      * more key to an existing language) - DB data is allowed to grow the set of languages the app
      * serves beyond {@code lang.support}/whatever files happened to already be on disk.
      * <p>
-     * The write-back step re-saves every key on every startup, not only ones actually changed by
-     * this merge - {@code save} is an upsert keyed on {@code (langKey, lang)} so this is idempotent,
-     * just redundant I/O against rows that already match; it exists so a key that only ever lived in
-     * a shipped JSON file (never edited through the admin UI) still ends up backed by a DB row too,
-     * same as the Kotlin original did.
+     * The write-back step only inserts keys the DB doesn't already have (a {@code lang::langKey}
+     * pair not seen in {@code existingDbKeys}) - "Smart Diffing", per {@code docs/LANGUAGE_API_GUIDE.md}
+     * - not a re-save of every key on every startup; it exists so a key that only ever lived in a
+     * shipped JSON file (never edited through the admin UI) still ends up backed by a DB row too,
+     * same as the Kotlin original did, without redundant I/O against rows that already match on
+     * every restart.
      */
     @PostConstruct
     public void loadLanguage() {

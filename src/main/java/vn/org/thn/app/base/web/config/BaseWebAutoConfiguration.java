@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -37,6 +38,7 @@ import java.util.Set;
  * declares its own bean of that type and this default is skipped.
  */
 @AutoConfiguration(after = WebMvcAutoConfiguration.class)
+@EnableConfigurationProperties(CorsProperties.class)
 public class BaseWebAutoConfiguration {
 
     /** Registers the default {@link GlobalExceptionHandler}, unless the consuming service defines its own. */
@@ -56,18 +58,24 @@ public class BaseWebAutoConfiguration {
         return registration;
     }
 
-    /** Permissive default CORS policy (any origin, common methods, any header) - tighten by declaring a service-specific {@link WebMvcConfigurer} bean instead. */
+    /**
+     * Default CORS policy, sourced from {@link CorsProperties} (permissive out of the box - any
+     * origin, common methods, any header - matching the previous hardcoded behavior) so a consuming
+     * service can tighten it per environment via {@code base.web.cors.*} in application-*.yaml
+     * instead of overriding this whole bean. Still fully overridable by declaring a service-specific
+     * {@link WebMvcConfigurer} bean.
+     */
     @Bean
     @ConditionalOnMissingBean(WebMvcConfigurer.class)
-    public WebMvcConfigurer corsConfigurer() {
+    public WebMvcConfigurer corsConfigurer(CorsProperties corsProperties) {
         return new WebMvcConfigurer() {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/**")
-                        .allowedOriginPatterns("*")
-                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                        .allowedHeaders("*")
-                        .exposedHeaders("X-Request-Id", "token");
+                        .allowedOriginPatterns(corsProperties.getAllowedOriginPatterns().toArray(new String[0]))
+                        .allowedMethods(corsProperties.getAllowedMethods().toArray(new String[0]))
+                        .allowedHeaders(corsProperties.getAllowedHeaders().toArray(new String[0]))
+                        .exposedHeaders(corsProperties.getExposedHeaders().toArray(new String[0]));
             }
         };
     }

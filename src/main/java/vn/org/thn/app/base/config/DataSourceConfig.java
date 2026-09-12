@@ -16,7 +16,7 @@ import java.util.List;
  * Builds the single application {@link DataSource} (a HikariCP pool) from whichever
  * {@link DatabaseProvider} matches {@link DatabaseProperties#getType()}: driver class name and
  * JDBC URL come from that provider, username/password from Spring Boot's own
- * {@link DataSourceProperties}, and pool sizing from {@link DatabaseProperties.Pool}. Before the
+ * {@link DataSourceProperties}, and pool sizing/timeouts from {@link DatabaseProperties.Pool}. Before the
  * pool itself is built, {@link DatabaseProvider#ensureDatabaseExists} runs so a target database
  * that doesn't exist yet gets created instead of failing the pool's very first connection.
  */
@@ -38,6 +38,9 @@ public class DataSourceConfig {
         config.setPassword(properties.getPassword());
         config.setMaximumPoolSize(databaseProperties.getPool().getMaxPoolSize());
         config.setMinimumIdle(databaseProperties.getPool().getMinIdle());
+        config.setConnectionTimeout(databaseProperties.getPool().getConnectionTimeoutMs());
+        config.setMaxLifetime(databaseProperties.getPool().getMaxLifetimeMs());
+        config.setLeakDetectionThreshold(databaseProperties.getPool().getLeakDetectionThresholdMs());
         return new HikariDataSource(config);
     }
 }

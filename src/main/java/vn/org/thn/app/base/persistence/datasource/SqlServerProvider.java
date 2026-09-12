@@ -67,7 +67,7 @@ public class SqlServerProvider implements DatabaseProvider {
      */
     @Override
     public void ensureDatabaseExists(DataSourceProperties dataSourceProperties) {
-        String dbName = databaseProperties.databaseName();
+        String dbName = validateDatabaseName(databaseProperties.databaseName());
         String adminUrl = urlPrefix() + ";databaseName=master";
 
         try (Connection conn = DriverManager.getConnection(adminUrl, dataSourceProperties.getUsername(), dataSourceProperties.getPassword())) {

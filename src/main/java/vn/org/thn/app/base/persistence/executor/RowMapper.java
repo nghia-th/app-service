@@ -16,6 +16,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -155,12 +157,48 @@ final class RowMapper {
         }
 
         if (value instanceof String s) {
-            if (targetType == LocalDateTime.class) return LocalDateTime.parse(s.replace(' ', 'T'));
-            if (targetType == LocalDate.class) return LocalDate.parse(s);
-            if (targetType == LocalTime.class) return LocalTime.parse(s);
+            if (targetType == LocalDateTime.class) return parseLocalDateTime(s);
+            if (targetType == LocalDate.class) return parseLocalDate(s);
+            if (targetType == LocalTime.class) return LocalTime.parse(s.trim());
             if (targetType == Boolean.class || targetType == boolean.class) return Boolean.parseBoolean(s) || "1".equals(s);
         }
 
         return value;
+    }
+
+    /**
+     * Parses a String -&gt; LocalDateTime as leniently as practical: a DB driver's exact text for a
+     * datetime-ish TEXT/VARCHAR column isn't guaranteed to be plain ISO-8601 - a space instead of
+     * "T" between date and time is the common case (handled first, same as before), but a trailing
+     * UTC/offset marker or missing seconds can also show up depending on how the row was written -
+     * see Medium finding #9 (2026-09-12 review). A trailing "Z" or numeric offset (e.g. "+07:00") is
+     * stripped before parsing, since {@link LocalDateTime} has no timezone component to hold it.
+     * Throws {@link IllegalStateException} naming the raw value - instead of a bare
+     * {@link DateTimeParseException} pointing only at java.time internals - when every attempt
+     * fails, so a genuinely unexpected format is easier to diagnose from the log.
+     */
+    private static LocalDateTime parseLocalDateTime(String raw) {
+        String s = raw.trim().replace(' ', 'T').replaceAll("(Z|[+-]\\d{2}:?\\d{2})$", "");
+        try {
+            return LocalDateTime.parse(s);
+        } catch (DateTimeParseException e) {
+            try {
+                // Missing seconds, e.g. "2024-01-01T10:00".
+                return LocalDateTime.parse(s, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"));
+            } catch (DateTimeParseException e2) {
+                throw new IllegalStateException(
+                        "Cannot parse '" + raw + "' as LocalDateTime (unexpected DB text format)", e2);
+            }
+        }
+    }
+
+    /** Same leniency/error-reporting approach as {@link #parseLocalDateTime}, for a plain date column. */
+    private static LocalDate parseLocalDate(String raw) {
+        try {
+            return LocalDate.parse(raw.trim());
+        } catch (DateTimeParseException e) {
+            throw new IllegalStateException(
+                    "Cannot parse '" + raw + "' as LocalDate (unexpected DB text format)", e);
+        }
     }
 }

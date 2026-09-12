@@ -17,6 +17,15 @@ import java.util.Map;
  * methods byte-for-byte identical, so the separate {@code listJson}/{@code oneJson} aliases were
  * dropped (confirmed zero callers anywhere in this repo) instead of being kept as a second name
  * for the exact same behavior.
+ * <p>
+ * <b>Security note (Medium finding #11, 2026-09-12 review):</b> every method here, like the rest
+ * of this ORM (see mapper/DynamicSQL.xml), substitutes {@code sql} into the executed statement
+ * text via MyBatis {@code ${sql}} - individual values are only safe because callers are expected
+ * to bind them as {@code #{name}} placeholders in {@code params}, never concatenated directly into
+ * {@code sql}. Nothing currently in this codebase does that concatenation (this note exists purely
+ * as an architecture flag for future PR review, not a report of an existing bug) - but doing so
+ * with any value that ultimately comes from a client request would be a direct SQL injection, with
+ * no other layer here to catch it.
  */
 @Component
 public class NativeQueryExecutor {

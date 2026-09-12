@@ -71,7 +71,7 @@ public class MySqlProvider implements DatabaseProvider {
      */
     @Override
     public void ensureDatabaseExists(DataSourceProperties dataSourceProperties) {
-        String dbName = databaseProperties.databaseName();
+        String dbName = validateDatabaseName(databaseProperties.databaseName());
 
         try (Connection conn = DriverManager.getConnection(urlPrefix(), dataSourceProperties.getUsername(), dataSourceProperties.getPassword());
              Statement stmt = conn.createStatement()) {

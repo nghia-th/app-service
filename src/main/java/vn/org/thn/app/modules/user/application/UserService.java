@@ -30,10 +30,16 @@ public class UserService {
         }
 
         if (keyword != null && !keyword.isBlank()) {
+            // fullName itself is matched via its unaccented mirror (fullNameUnaccent, auto-populated
+            // by @Unaccent - see UserEntity) with likeAnyOrderUnaccent, so this is a genuine
+            // multi-token, order-independent, accent-insensitive match on the name (as advertised by
+            // docs/BASE_FRAMEWORK_GUIDE.md 2.8 / docs/PROMPT_TEMPLATES.md "Mau 2.3" - previously this
+            // module never actually exercised that feature, see Medium finding #13, 2026-09-12
+            // review), not just an exact-match fallback.
             query.and(sub -> sub
                     .like(UserEntity::getUsername, keyword)
-                    .orEq(UserEntity::getFullName, keyword)
                     .orEq(UserEntity::getEmail, keyword)
+                    .or(nameSub -> nameSub.likeAnyOrderUnaccent(UserEntity::getFullNameUnaccent, keyword))
             );
         }
 
