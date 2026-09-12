@@ -203,7 +203,7 @@ public final class QueryBuilder<T> extends BaseConditionBuilder<T, QueryBuilder<
         }
     }
 
-    /** 1-based page number, matching the Kotlin original's DSL (unlike {@link vn.org.thn.service.base.dto.page.PageRequest}, which is 0-based). */
+    /** 1-based page number, matching the Kotlin original's DSL (unlike {@link vn.org.thn.app.base.core.dto.page.PageRequest}, which is 0-based). */
     public QueryBuilder<T> page(int page, int size) {
         if (page <= 0) throw new IllegalArgumentException("page must be greater than 0");
         if (size <= 0) throw new IllegalArgumentException("size must be greater than 0");

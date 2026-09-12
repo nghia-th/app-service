@@ -5,7 +5,7 @@ server:
 base:
   database:
     type: SQLITE
-    db-name: quiz_db
+    db-name: app_service
     dbPrefix: test
     sql-log: BASIC
     pool:

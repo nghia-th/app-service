@@ -32,7 +32,7 @@ public class DatabaseInitializer {
 
     /**
      * Finds the {@link DatabaseProvider} matching {@code type} among all discovered provider beans.
-     * Also used by {@link vn.org.thn.service.base.db.config.DataSourceConfig} to resolve the
+     * Also used by {@link vn.org.thn.app.base.config.DataSourceConfig} to resolve the
      * driver/JDBC URL before the {@link DataSource} bean even exists.
      *
      * @throws IllegalStateException if no provider is registered for {@code type} (e.g. the

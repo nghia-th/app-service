@@ -1,6 +1,6 @@
 package vn.org.thn.app.base.persistence.dialect;
 
-/** {@link SqlDialect} for MySQL 8+. Requires {@code allowMultiQueries=true} on the JDBC URL (see {@link vn.org.thn.service.base.db.MySqlProvider}) since {@link #buildInsertReturning} produces a multi-statement string. */
+/** {@link SqlDialect} for MySQL 8+. Requires {@code allowMultiQueries=true} on the JDBC URL (see {@link vn.org.thn.app.base.persistence.datasource.MySqlProvider}) since {@link #buildInsertReturning} produces a multi-statement string. */
 public class MySqlDialect implements SqlDialect {
 
     @Override

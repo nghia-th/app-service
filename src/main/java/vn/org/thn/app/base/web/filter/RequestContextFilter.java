@@ -23,7 +23,7 @@ import java.util.UUID;
  * {@code RequestLoggingFilter}, {@code CleanupFilter}), which independently duplicated MDC
  * population from two different sources (header-based vs. the servlet container's own generated
  * request id) and each set their own CORS headers on top of what {@code WebMvcConfigurer} already
- * configures in {@link vn.org.thn.service.base.config.BaseWebAutoConfiguration}. CORS is
+ * configures in {@link vn.org.thn.app.base.web.config.BaseWebAutoConfiguration}. CORS is
  * intentionally not touched here - it belongs to the CORS config alone.
  * <p>
  * <b>Body size cap:</b> a request is only cached/logged with its body when it declares a

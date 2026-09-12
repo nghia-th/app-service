@@ -5,7 +5,7 @@ server:
 base:
   database:
     type: POSTGRESQL              # Staging thường dùng CSDL quan hệ thực tế như Postgres / MySQL
-    db-name: quiz_db
+    db-name: app_service
     dbPrefix: staging
     sql-log: BASIC                # Mức log BASIC hiển thị SQL và thời gian thực thi
     pool:

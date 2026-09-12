@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
  * Common audit columns for MyBatis-mapped entities - createdAt/updatedAt/createdBy/updatedBy plus
  * a soft-delete flag. Deliberately has no {@code id} field: primary keys vary too much between
  * entities (a single auto-increment {@code Long}, a business-assigned {@code String}/UUID, or a
- * composite key spread across several fields like {@link vn.org.thn.service.base.i18n.Translate}),
+ * composite key spread across several fields like {@link vn.org.thn.app.base.i18n.domain.Translate}),
  * so each entity declares its own {@code @Id} (and {@code @GeneratedValue} if it is DB-generated)
  * directly - extending this class only ever adds the audit columns, never forces a particular key
  * shape.

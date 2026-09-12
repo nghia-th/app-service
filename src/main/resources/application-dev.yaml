@@ -5,7 +5,7 @@ server:
 base:
   database:
     type: SQLITE                  # SQLITE / POSTGRESQL / MYSQL / SQLSERVER / ORACLE
-    db-name: quiz_db
+    db-name: app_service
     dbPrefix: dev
     sql-log: FULL                 # Môi trường DEV: FULL để xem chi tiết toàn bộ câu SQL và bind parameters
     pool:

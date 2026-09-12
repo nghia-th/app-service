@@ -16,10 +16,10 @@ import java.util.List;
  */
 public interface BaseRepository<T, ID> {
 
-    /** Inserts or updates {@code entity} (INSERT/UPDATE decided per the rules in {@link vn.org.thn.service.base.db.mybatis.executor.InsertExecutor#save}). Returns the same instance, mutated with any generated id. */
+    /** Inserts or updates {@code entity} (INSERT/UPDATE decided per the rules in {@link vn.org.thn.app.base.persistence.executor.InsertExecutor#save}). Returns the same instance, mutated with any generated id. */
     T save(T entity);
 
-    /** Bulk-saves every entity in {@code entities}. See {@link vn.org.thn.service.base.db.mybatis.executor.BatchInsertExecutor#saveAll} for the identity-column vs. flattened-batch split. */
+    /** Bulk-saves every entity in {@code entities}. See {@link vn.org.thn.app.base.persistence.executor.BatchInsertExecutor#saveAll} for the identity-column vs. flattened-batch split. */
     List<T> saveAll(Collection<T> entities);
 
     /** Deletes the row with primary key {@code id}. Requires a single-column primary key - use {@link #deleteByIds} for a composite key. */

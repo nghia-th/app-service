@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import vn.org.thn.app.base.config.DatabaseProperties;
 import vn.org.thn.app.base.persistence.datasource.DatabasePath;
+import vn.org.thn.app.base.persistence.datasource.DatabaseType;
 
 
 import javax.sql.DataSource;
@@ -34,9 +35,11 @@ public class FlywayConfig {
                 // database/sqlite/V18__question_answer_mode_nullable.sql). Flyway treats a PRAGMA
                 // as non-transactional and, by default (mixed=false), refuses to run a migration
                 // that mixes non-transactional and transactional statements in one script - this
-                // pattern will keep recurring for future SQLite column changes, so it's enabled
-                // here once rather than worked around per-migration.
-                .mixed(true)
+                // pattern will keep recurring for future SQLite column changes. Scoped to SQLite
+                // only (not a blanket `.mixed(true)` for every engine) so a failed migration on
+                // Postgres/MySQL/SQL Server/Oracle still rolls back cleanly instead of possibly
+                // leaving the database half-migrated - see Medium finding #12 (2026-09-12 review).
+                .mixed(databaseProperties.getType() == DatabaseType.SQLITE)
                 .load();
     }
 }

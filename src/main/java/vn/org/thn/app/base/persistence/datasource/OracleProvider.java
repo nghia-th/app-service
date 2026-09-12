@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
 
-/** Targets Oracle 12c+ (see {@link vn.org.thn.service.base.db.mybatis.dialect.OracleDialect}). */
+/** Targets Oracle 12c+ (see {@link vn.org.thn.app.base.persistence.dialect.OracleDialect}). */
 @Component
 public class OracleProvider implements DatabaseProvider {
 

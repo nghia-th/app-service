@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * SQL directly, "Service" fits the Java/Spring convention better than "Repo". Also a proper
  * {@code @Service} bean now (constructor/field {@code @Autowired}) instead of the original's
  * manually-{@code new}'d class that reached its dependencies through the
- * {@code ApplicationContextProvider} service-locator - see {@link vn.org.thn.service.base.IBase}
+ * {@code ApplicationContextProvider} service-locator - see {@link vn.org.thn.app.base.IBase}
  * for why that pattern was dropped project-wide.
  * <p>
  * Fixed one bug versus the original: {@code deleteLanguage} built a {@code DeleteBuilder}

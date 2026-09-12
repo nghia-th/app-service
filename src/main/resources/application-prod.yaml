@@ -5,7 +5,7 @@ server:
 base:
   database:
     type: POSTGRESQL              # CSDL production (PostgreSQL / MySQL / Oracle)
-    db-name: quiz_db
+    db-name: app_service
     dbPrefix: prod
     sql-log: OFF                  # Tắt toàn bộ SQL log trên Production để đảm bảo hiệu năng và bảo mật
     pool:

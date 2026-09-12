@@ -42,7 +42,7 @@ import java.util.zip.ZipOutputStream;
  * {@link #addOrUpdate} validates every language code in the request against {@link #LANG_CODE_PATTERN}
  * before it ever reaches {@link LanguageService}: a language code eventually becomes part of a
  * file name ({@code lang/<code>.json}) in {@link LanguageService#updateLanguage}, and this endpoint
- * is unauthenticated (no security/JWT layer in {@code base} - see {@link vn.org.thn.service.base.IBase}),
+ * is unauthenticated (no security/JWT layer in {@code base} - see {@link vn.org.thn.app.base.IBase}),
  * so an unvalidated code would be a path-traversal opening (e.g. a code like {@code ../../evil}).
  */
 @RestController

@@ -21,7 +21,7 @@ public interface DatabaseProvider {
 
     /**
      * Creates the target database itself if it doesn't exist yet, called once before the pooled
-     * {@link DataSource} in {@link vn.org.thn.service.base.db.config.DataSourceConfig} is built
+     * {@link DataSource} in {@link vn.org.thn.app.base.config.DataSourceConfig} is built
      * against it (a {@code DataSource} pointed at a nonexistent database fails immediately, so this
      * has to run against a separate admin connection first). No-op by default. Implemented for
      * Postgres, MySQL and SQL Server (see each provider's own override); SQLite doesn't need an

@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
  * because the Java port already covers them better elsewhere: {@code autoWired()} (a
  * service-locator over {@code ApplicationContextProvider}) is replaced project-wide by plain
  * {@code @Autowired} injection, and {@code tableName()} is replaced by
- * {@link vn.org.thn.service.base.db.mybatis.metadata.EntityCache}, which resolves and caches the
+ * {@link vn.org.thn.app.base.persistence.metadata.EntityCache}, which resolves and caches the
  * table name once per entity class at parse time instead of lazily per call.
  */
 public abstract class IBase {

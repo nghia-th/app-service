@@ -64,10 +64,10 @@ public class DatabaseProperties {
     }
 
     /**
-     * The actual database/schema name every {@link vn.org.thn.service.base.db.DatabaseProvider}
+     * The actual database/schema name every {@link vn.org.thn.app.base.persistence.datasource.DatabaseProvider}
      * builds its JDBC URL from (Postgres/MySQL/SQL Server - not Oracle, which keeps its own
      * self-contained {@code jdbc-url} property; see {@code OracleProvider}'s class doc) and that
-     * {@link vn.org.thn.service.base.db.DatabaseProvider#ensureDatabaseExists} creates if missing:
+     * {@link vn.org.thn.app.base.persistence.datasource.DatabaseProvider#ensureDatabaseExists} creates if missing:
      * {@link #dbPrefix} + {@code "_"} + {@link #dbName} when a prefix is set (e.g. {@code "dev"} +
      * {@code "example"} -> {@code "dev_example"}), or just {@link #dbName} when {@link #dbPrefix} is
      * blank (the default) - so the name is never hardcoded inside a provider's JDBC URL property.
@@ -80,15 +80,24 @@ public class DatabaseProperties {
     }
 
     /**
-     * HikariCP pool sizing, overridable per service/environment via
-     * {@code base.database.pool.max-pool-size} / {@code base.database.pool.min-idle} without
-     * touching code. Defaults match this module's original hardcoded values (a small footprint,
-     * suitable for a low-traffic service) - raise them for a service under heavier concurrent load.
+     * HikariCP pool sizing and timeouts, overridable per service/environment via
+     * {@code base.database.pool.*} without touching code. {@link #maxPoolSize}/{@link #minIdle}
+     * default to this module's original hardcoded values (a small footprint, suitable for a
+     * low-traffic service) - raise them for a service under heavier concurrent load.
+     * {@link #connectionTimeoutMs}/{@link #maxLifetimeMs}/{@link #leakDetectionThresholdMs} default
+     * to HikariCP's own library defaults (previously left unset here, so a pool leak or a stuck
+     * connection acquisition had no explicit budget to surface against - see Low finding, 2026-09-12
+     * review) - set explicitly so they show up as real, overridable config instead of implicit
+     * library defaults, and so {@code leak-detection-threshold-ms} can be turned on in prod without
+     * a code change.
      */
     public static class Pool {
 
         private int maxPoolSize = 5;
         private int minIdle = 1;
+        private long connectionTimeoutMs = 30_000L;
+        private long maxLifetimeMs = 1_800_000L;
+        private long leakDetectionThresholdMs = 0L;
 
         public int getMaxPoolSize() {
             return maxPoolSize;
@@ -104,6 +113,31 @@ public class DatabaseProperties {
 
         public void setMinIdle(int minIdle) {
             this.minIdle = minIdle;
+        }
+
+        public long getConnectionTimeoutMs() {
+            return connectionTimeoutMs;
+        }
+
+        public void setConnectionTimeoutMs(long connectionTimeoutMs) {
+            this.connectionTimeoutMs = connectionTimeoutMs;
+        }
+
+        public long getMaxLifetimeMs() {
+            return maxLifetimeMs;
+        }
+
+        public void setMaxLifetimeMs(long maxLifetimeMs) {
+            this.maxLifetimeMs = maxLifetimeMs;
+        }
+
+        /** 0 (the default here, same as HikariCP's own default) disables leak detection; a positive value logs a warning for any connection held longer than this without being closed. */
+        public long getLeakDetectionThresholdMs() {
+            return leakDetectionThresholdMs;
+        }
+
+        public void setLeakDetectionThresholdMs(long leakDetectionThresholdMs) {
+            this.leakDetectionThresholdMs = leakDetectionThresholdMs;
         }
     }
 }

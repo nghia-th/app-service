@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>
  * This replaces the Kotlin original's approach of running every row through a Jackson
  * {@code ObjectMapper#convertValue(row, clazz)} configured with
- * {@code PropertyNamingStrategies.SNAKE_CASE}. Deliberately not reusing {@link vn.org.thn.service.base.util.JsonUtils}
+ * {@code PropertyNamingStrategies.SNAKE_CASE}. Deliberately not reusing {@link vn.org.thn.app.base.util.JsonUtils}
  * here: this has nothing to do with JSON, and after the JsonUtils/Jackson-3 package-path debugging
  * earlier in this port, row-mapping is kept on the same plain-reflection metadata the rest of the
  * ORM already uses (entity classes reuse {@link EntityCache}; anything else gets an ad-hoc

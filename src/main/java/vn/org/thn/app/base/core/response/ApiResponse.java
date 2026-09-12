@@ -11,7 +11,7 @@ import java.time.Instant;
 /**
  * Standard response envelope returned by every REST endpoint across services.
  * <p>
- * {@code @Getter} only - same reasoning as {@link vn.org.thn.service.base.dto.page.PageResponse}:
+ * {@code @Getter} only - same reasoning as {@link vn.org.thn.app.base.core.dto.page.PageResponse}:
  * every instance is built once through {@link #success}/{@link #error} and never mutated again, so
  * this class keeps that read-only contract instead of picking up Lombok setters.
  */

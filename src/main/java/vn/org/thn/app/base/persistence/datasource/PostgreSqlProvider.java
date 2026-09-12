@@ -14,7 +14,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-/** {@link DatabaseProvider} for PostgreSQL - see {@link vn.org.thn.service.base.db.mybatis.dialect.PostgreSqlDialect} for its SQL dialect. */
+/** {@link DatabaseProvider} for PostgreSQL - see {@link vn.org.thn.app.base.persistence.dialect.PostgreSqlDialect} for its SQL dialect. */
 @Component
 public class PostgreSqlProvider implements DatabaseProvider {
 

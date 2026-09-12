@@ -14,7 +14,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-/** {@link DatabaseProvider} for Microsoft SQL Server - see {@link vn.org.thn.service.base.db.mybatis.dialect.SqlServerDialect} for its SQL dialect. */
+/** {@link DatabaseProvider} for Microsoft SQL Server - see {@link vn.org.thn.app.base.persistence.dialect.SqlServerDialect} for its SQL dialect. */
 @Component
 public class SqlServerProvider implements DatabaseProvider {
 
