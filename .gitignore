@@ -38,3 +38,7 @@ out/
 .DS_Store
 /data
 /logs
+### Secrets (never commit real credentials) ###
+/config/secrets.yaml
+/config/secrets-*.yaml
+!/config/secrets.yaml.example
