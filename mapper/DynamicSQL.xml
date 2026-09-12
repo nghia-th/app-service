@@ -8,6 +8,18 @@
         ${sql}
     </update>
 
+    <!--
+      Runs sql (currently only Oracle's anonymous PL/SQL "INSERT ... RETURNING ... INTO" block, see
+      OracleDialect#buildInsertReturningCallable) via a CallableStatement instead of a plain
+      PreparedStatement, so a #{name, mode=OUT, jdbcType=...} placeholder embedded in that text
+      binds an OUT parameter that MyBatis writes back onto the Map parameter object after
+      execution - this is what lets InsertExecutor read the generated identity value back out in
+      the same round trip as the INSERT.
+    -->
+    <update id="executeCallable" parameterType="map" statementType="CALLABLE">
+        ${sql}
+    </update>
+
     <select id="select" parameterType="map" resultType="map">
         ${sql}
     </select>

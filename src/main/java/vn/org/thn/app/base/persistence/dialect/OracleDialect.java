@@ -5,13 +5,17 @@ package vn.org.thn.app.base.persistence.dialect;
  * (ROWNUM-based paging, sequence + BEFORE INSERT trigger for ids) is not supported.
  * <p>
  * Unlike Postgres/MySQL/SQL Server/SQLite, plain JDBC has no way to combine "INSERT" and "read
- * back the new id" into one round trip for Oracle (its {@code RETURNING ... INTO} clause needs an
- * OUT-bound {@code CallableStatement}, which doesn't fit this module's generic "one raw SQL
- * string -&gt; one query" executor) - see {@link #singleStatementReturning()}: {@code false} here
- * means {@code InsertExecutor} runs {@link #buildInsertReturning} as a plain INSERT first, then
- * separately queries {@link #buildIdentitySelect}. That second query is a pragmatic
- * {@code SELECT MAX(id)} - not safe under concurrent inserts into the same table; fine for
- * low-concurrency/admin tables, but do not rely on it where writers race.
+ * back the new id" into one query for Oracle via this module's generic "one raw SQL string -&gt;
+ * one query" executor - see {@link #singleStatementReturning()}: {@code false} here means
+ * {@code InsertExecutor} does not use {@link #buildInsertReturning} to fetch the id directly.
+ * Instead, Oracle's {@code RETURNING ... INTO} clause is used the way it actually works on the
+ * JDBC driver - bound to an OUT parameter on a {@code CallableStatement}, via
+ * {@link #buildInsertReturningCallable} - which still completes the INSERT and the id lookup in a
+ * single round trip and is safe under concurrent inserts into the same table, unlike a follow-up
+ * {@code SELECT MAX(id)}. {@link #buildIdentitySelect} (the {@code SELECT MAX(id)} approach) is
+ * kept only as a documented last-resort fallback and is not used in practice, since
+ * {@link #buildInsertReturningCallable} always returns a usable statement whenever this entity
+ * has an identity column.
  */
 public class OracleDialect implements SqlDialect {
 
@@ -46,7 +50,27 @@ public class OracleDialect implements SqlDialect {
         return false;
     }
 
-    /** Best-effort {@code SELECT MAX(id)} to recover the just-inserted id - see the class doc for its concurrency caveat. */
+    /**
+     * Single-round-trip, concurrency-safe identity retrieval for Oracle: an anonymous PL/SQL block
+     * that inserts the row and binds the newly generated {@code identityColumn} value to
+     * {@link #RETURNING_ID_PARAM} via {@code RETURNING ... INTO}, executed as a CallableStatement
+     * (see mapper/DynamicSQL.xml's {@code executeCallable} statement) - see the class doc.
+     */
+    @Override
+    public String buildInsertReturningCallable(String table, String columns, String params, String identityColumn) {
+        if (identityColumn == null) {
+            return null;
+        }
+        return "BEGIN INSERT INTO " + table + " (" + columns + ") VALUES (" + params + ") RETURNING "
+                + identityColumn + " INTO #{" + RETURNING_ID_PARAM + ", mode=OUT, jdbcType=NUMERIC}; END;";
+    }
+
+    /**
+     * Last-resort fallback, not used in practice - see the class doc and
+     * {@link #buildInsertReturningCallable}. Kept documented in case a future caller needs identity
+     * retrieval with no identity column info available to build the callable form; a plain
+     * {@code SELECT MAX(id)} is NOT safe under concurrent inserts into the same table.
+     */
     @Override
     public String buildIdentitySelect(String table, String identityColumn) {
         return "SELECT MAX(" + identityColumn + ") AS " + identityColumn + " FROM " + table;

@@ -150,41 +150,69 @@ public class InsertExecutor extends BaseExecutor {
 
     /**
      * INSERT and hand back the DB-generated identity value, for an entity whose id is not supplied
-     * by the caller. Most dialects embed "insert, then read the new id" in one statement/round
-     * trip; Oracle can't - {@link SqlDialect#buildInsertReturning} there is a plain INSERT, and the
-     * id is fetched by a second, separate query. See {@link SqlDialect#singleStatementReturning}.
+     * by the caller. {@code insertAndReturnAutoId} is the same operation under a second name kept
+     * for call-site clarity (auto-identity insert vs. an insert that merely happens to return an
+     * id) - both delegate to {@link #insertReturningId}.
      */
     public Object insertAndReturnId(Set<String> columns, EntityInfo info, Map<String, Object> paramMap) {
-        String cols = String.join(",", columns);
-        String params = String.join(",", columns.stream().map(c -> "#{" + c + "}").toList());
-
-        String sql = dialect.buildInsertReturning(info.getTableName(), cols, params, info.getIdentityColumn());
-
-        if (!dialect.singleStatementReturning()) {
-            runSql(sql, paramMap);
-            if (info.getIdentityColumn() == null) {
-                return null;
-            }
-            String selectSql = dialect.buildIdentitySelect(info.getTableName(), info.getIdentityColumn());
-            return selectValue(selectSql, Map.of());
-        }
-        return selectValue(sql, paramMap);
+        return insertReturningId(columns, info, paramMap);
     }
+
     public Object insertAndReturnAutoId(Set<String> columns, EntityInfo info, Map<String, Object> paramMap) {
+        return insertReturningId(columns, info, paramMap);
+    }
+
+    /**
+     * Most dialects (Postgres/MySQL/SQL Server/SQLite) embed "insert, then read the new id" in one
+     * statement/round trip via {@link SqlDialect#buildInsertReturning} - see
+     * {@link SqlDialect#singleStatementReturning}. Oracle can't do that through this module's
+     * generic "one raw SQL string -&gt; one query" executor, so it instead provides
+     * {@link SqlDialect#buildInsertReturningCallable}: a single CallableStatement round trip that
+     * is still safe under concurrent inserts into the same table. Only a dialect with neither
+     * option (or an entity with no identity column) falls back to the separate, non-atomic
+     * {@link SqlDialect#buildIdentitySelect} query.
+     */
+    private Object insertReturningId(Set<String> columns, EntityInfo info, Map<String, Object> paramMap) {
         String cols = String.join(",", columns);
         String params = String.join(",", columns.stream().map(c -> "#{" + c + "}").toList());
 
-        String sql = dialect.buildInsertReturning(info.getTableName(), cols, params, info.getIdentityColumn());
-
-        if (!dialect.singleStatementReturning()) {
-            runSql(sql, paramMap);
-            if (info.getIdentityColumn() == null) {
-                return null;
-            }
-            String selectSql = dialect.buildIdentitySelect(info.getTableName(), info.getIdentityColumn());
-            return selectValue(selectSql, Map.of());
+        if (dialect.singleStatementReturning()) {
+            String sql = dialect.buildInsertReturning(info.getTableName(), cols, params, info.getIdentityColumn());
+            return selectValue(sql, paramMap);
         }
-        return selectValue(sql, paramMap);
+
+        if (info.getIdentityColumn() != null) {
+            String callableSql = dialect.buildInsertReturningCallable(info.getTableName(), cols, params, info.getIdentityColumn());
+            if (callableSql != null) {
+                return runCallableReturningId(callableSql, paramMap);
+            }
+        }
+
+        // Last-resort fallback: separate INSERT + best-effort SELECT - NOT safe under concurrent
+        // inserts into the same table (see SqlDialect#buildIdentitySelect). Not exercised by any
+        // current dialect when an identity column is present (Oracle always has a callable path).
+        String sql = dialect.buildInsertReturning(info.getTableName(), cols, params, info.getIdentityColumn());
+        runSql(sql, paramMap);
+        if (info.getIdentityColumn() == null) {
+            return null;
+        }
+        String selectSql = dialect.buildIdentitySelect(info.getTableName(), info.getIdentityColumn());
+        return selectValue(selectSql, Map.of());
+    }
+
+    /**
+     * Runs {@code sql} (an anonymous PL/SQL RETURNING ... INTO block, for Oracle) as a
+     * CallableStatement via the generic {@code DynamicSQL.executeCallable} mapper statement, then
+     * reads back the identity value MyBatis bound into {@link SqlDialect#RETURNING_ID_PARAM} on the
+     * parameter map after execution.
+     */
+    private Object runCallableReturningId(String sql, Map<String, Object> paramMap) {
+        Map<String, Object> wrapper = new HashMap<>();
+        wrapper.put("sql", sql);
+        wrapper.putAll(paramMap);
+        wrapper.put(SqlDialect.RETURNING_ID_PARAM, null);
+        session.update("DynamicSQL.executeCallable", wrapper);
+        return wrapper.get(SqlDialect.RETURNING_ID_PARAM);
     }
 
     /** Runs {@code sql} and unwraps a single scalar result from the first column of the first (only) returned row. */
