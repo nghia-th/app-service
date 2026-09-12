@@ -84,7 +84,7 @@ class UserServiceTest {
     @Test
     @DisplayName("Should update user successfully when user exists")
     void updateUser_userExists_returnsUpdatedUserResponse() {
-        UserEntity existing = new UserEntity(1L, "john_doe", "john@example.com", "John Doe", "ACTIVE", "USER");
+        UserEntity existing = new UserEntity(1L, "john_doe", "john@example.com", "John Doe", "john doe", "ACTIVE", "USER");
         UserUpdateRequest request = new UserUpdateRequest("john.new@example.com", "John Updated", "ACTIVE", "ADMIN");
 
         when(userRepository.findById(1L)).thenReturn(existing);
@@ -107,7 +107,7 @@ class UserServiceTest {
     @Test
     @DisplayName("Should throw BusinessException when updating with duplicate email")
     void updateUser_duplicateEmail_throwsBusinessException() {
-        UserEntity existing = new UserEntity(1L, "john_doe", "john@example.com", "John Doe", "ACTIVE", "USER");
+        UserEntity existing = new UserEntity(1L, "john_doe", "john@example.com", "John Doe", "john doe", "ACTIVE", "USER");
         UserUpdateRequest request = new UserUpdateRequest("john.other@example.com", "John Updated", "ACTIVE", "ADMIN");
 
         when(userRepository.findById(1L)).thenReturn(existing);

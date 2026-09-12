@@ -373,6 +373,66 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
         return orEq(fieldName(field), value);
     }
 
+    /** Adds a {@code field LIKE '%value%'} condition, OR-joined with previous conditions, with wildcards escaped. No-op if {@code value} is null/blank. */
+    public SELF orLike(String field, String value) {
+        if (value == null || value.isBlank()) return self();
+        String key = nextParam();
+        params.put(key, "%" + escapeLikeWildcards(value) + "%");
+        whereClauses.add(new QueryCondition(column(field) + " LIKE #{" + key + "} ESCAPE '" + LIKE_ESCAPE_CHAR + "'", QueryLogic.OR));
+        return self();
+    }
+
+    /** {@link #orLike(String, String)} with the field named via a method reference instead of a string. */
+    public SELF orLike(SFunction<T, ?> field, String value) {
+        return orLike(fieldName(field), value);
+    }
+
+    /** Adds a {@code field LIKE 'value%'} (prefix match) condition, OR-joined with previous conditions, with wildcards escaped. No-op if {@code value} is null/blank. */
+    public SELF orStartsWith(String field, String value) {
+        if (value == null || value.isBlank()) return self();
+        String key = nextParam();
+        params.put(key, escapeLikeWildcards(value) + "%");
+        whereClauses.add(new QueryCondition(column(field) + " LIKE #{" + key + "} ESCAPE '" + LIKE_ESCAPE_CHAR + "'", QueryLogic.OR));
+        return self();
+    }
+
+    /** {@link #orStartsWith(String, String)} with the field named via a method reference instead of a string. */
+    public SELF orStartsWith(SFunction<T, ?> field, String value) {
+        return orStartsWith(fieldName(field), value);
+    }
+
+    /** Adds a {@code field LIKE '%value'} (suffix match) condition, OR-joined with previous conditions, with wildcards escaped. No-op if {@code value} is null/blank. */
+    public SELF orEndsWith(String field, String value) {
+        if (value == null || value.isBlank()) return self();
+        String key = nextParam();
+        params.put(key, "%" + escapeLikeWildcards(value));
+        whereClauses.add(new QueryCondition(column(field) + " LIKE #{" + key + "} ESCAPE '" + LIKE_ESCAPE_CHAR + "'", QueryLogic.OR));
+        return self();
+    }
+
+    /** {@link #orEndsWith(String, String)} with the field named via a method reference instead of a string. */
+    public SELF orEndsWith(SFunction<T, ?> field, String value) {
+        return orEndsWith(fieldName(field), value);
+    }
+
+    /** Adds a {@code field IN (...)} condition, OR-joined with previous conditions. No-op if {@code values} is null/empty. */
+    public SELF orIn(String field, Collection<?> values) {
+        if (values == null || values.isEmpty()) return self();
+        List<String> placeholders = new ArrayList<>();
+        for (Object v : values) {
+            String key = nextParam();
+            params.put(key, v);
+            placeholders.add("#{" + key + "}");
+        }
+        whereClauses.add(new QueryCondition(column(field) + " IN (" + String.join(",", placeholders) + ")", QueryLogic.OR));
+        return self();
+    }
+
+    /** {@link #orIn(String, Collection)} with the field named via a method reference instead of a string. */
+    public <R> SELF orIn(SFunction<T, R> field, Collection<R> values) {
+        return orIn(fieldName(field), values);
+    }
+
     /** Adds a raw, already-rendered SQL fragment as a WHERE condition (AND-joined), with no bind parameters. */
     public SELF raw(String sql) {
         return raw(sql, Map.of());

@@ -57,6 +57,25 @@ class QueryBuilderTest {
     }
 
     @Test
+    @DisplayName("Should build WHERE clause with orLike, orStartsWith, orEndsWith, and orIn")
+    void buildSql_orConditions_success() {
+        QueryBuilder<Translate> builder = new QueryBuilder<>(Translate.class, translateEntityInfo, queryExecutor);
+        builder.like(Translate::getLangKey, "hello")
+               .orLike(Translate::getValue, "world")
+               .orStartsWith(Translate::getLang, "v")
+               .orEndsWith(Translate::getValue, "!")
+               .orIn(Translate::getLang, List.of("en", "vi"));
+
+        String sql = builder.toSql();
+
+        assertTrue(sql.contains("lang_key LIKE #{p"));
+        assertTrue(sql.contains("OR value LIKE #{p"));
+        assertTrue(sql.contains("OR lang LIKE #{p"));
+        assertTrue(sql.contains("OR value LIKE #{p"));
+        assertTrue(sql.contains("OR lang IN (#{p"));
+    }
+
+    @Test
     @DisplayName("Should build UPDATE query with prefixed set_ parameters and execute properly")
     void updateBuilder_buildSql_usesSetPrefix() {
         UpdateBuilder<Translate> builder = new UpdateBuilder<>(Translate.class, translateEntityInfo, queryExecutor);

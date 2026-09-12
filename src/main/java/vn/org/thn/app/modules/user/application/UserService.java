@@ -38,7 +38,7 @@ public class UserService {
             // review), not just an exact-match fallback.
             query.and(sub -> sub
                     .like(UserEntity::getUsername, keyword)
-                    .orEq(UserEntity::getEmail, keyword)
+                    .orLike(UserEntity::getEmail, keyword)
                     .or(nameSub -> nameSub.likeAnyOrderUnaccent(UserEntity::getFullNameUnaccent, keyword))
             );
         }

@@ -136,20 +136,25 @@ Product product = productRepository.query()
 #### b) Danh Sách Các Toán Tử Hỗ Trợ:
 | Phương thức | Ví dụ | Ý nghĩa SQL |
 |---|---|---|
-| `eq(Field, val)` | `.eq(Product::getStatus, "ACTIVE")` | `status = 'ACTIVE'` |
-| `ne(Field, val)` | `.ne(Product::getStatus, "DELETED")` | `status <> 'DELETED'` |
-| `gt(Field, val)` | `.gt(Product::getPrice, 50.0)` | `price > 50.0` |
-| `ge(Field, val)` | `.ge(Product::getPrice, 50.0)` | `price >= 50.0` |
-| `lt(Field, val)` | `.lt(Product::getPrice, 200.0)` | `price < 200.0` |
-| `le(Field, val)` | `.le(Product::getPrice, 200.0)` | `price <= 200.0` |
-| `like(Field, val)` | `.like(Product::getProductName, "iPhone")` | `product_name LIKE '%iPhone%'` |
-| `startsWith(Field, val)` | `.startsWith(Product::getProductName, "Mac")` | `product_name LIKE 'Mac%'` |
-| `endsWith(Field, val)` | `.endsWith(Product::getProductName, "Pro")` | `product_name LIKE '%Pro'` |
-| `in(Field, Collection)` | `.in(Product::getId, List.of(1L, 2L, 3L))` | `id IN (1, 2, 3)` |
-| `notIn(Field, Collection)`| `.notIn(Product::getStatus, List.of("A", "B"))` | `status NOT IN ('A', 'B')` |
-| `between(Field, min, max)`| `.between(Product::getPrice, 10.0, 50.0)` | `price BETWEEN 10.0 AND 50.0` |
-| `isNull(Field)` | `.isNull(Product::getStatus)` | `status IS NULL` |
-| `isNotNull(Field)` | `.isNotNull(Product::getStatus)` | `status IS NOT NULL` |
+| `eq(Field, val)` | `.eq(Product::getStatus, "ACTIVE")` | `status = 'ACTIVE'` (AND) |
+| `ne(Field, val)` | `.ne(Product::getStatus, "DELETED")` | `status <> 'DELETED'` (AND) |
+| `gt(Field, val)` | `.gt(Product::getPrice, 50.0)` | `price > 50.0` (AND) |
+| `ge(Field, val)` | `.ge(Product::getPrice, 50.0)` | `price >= 50.0` (AND) |
+| `lt(Field, val)` | `.lt(Product::getPrice, 200.0)` | `price < 200.0` (AND) |
+| `le(Field, val)` | `.le(Product::getPrice, 200.0)` | `price <= 200.0` (AND) |
+| `like(Field, val)` | `.like(Product::getProductName, "iPhone")` | `product_name LIKE '%iPhone%'` (AND) |
+| `startsWith(Field, val)` | `.startsWith(Product::getProductName, "Mac")` | `product_name LIKE 'Mac%'` (AND) |
+| `endsWith(Field, val)` | `.endsWith(Product::getProductName, "Pro")` | `product_name LIKE '%Pro'` (AND) |
+| `in(Field, Collection)` | `.in(Product::getId, List.of(1L, 2L, 3L))` | `id IN (1, 2, 3)` (AND) |
+| `notIn(Field, Collection)`| `.notIn(Product::getStatus, List.of("A", "B"))` | `status NOT IN ('A', 'B')` (AND) |
+| `between(Field, min, max)`| `.between(Product::getPrice, 10.0, 50.0)` | `price BETWEEN 10.0 AND 50.0` (AND) |
+| `isNull(Field)` | `.isNull(Product::getStatus)` | `status IS NULL` (AND) |
+| `isNotNull(Field)` | `.isNotNull(Product::getStatus)` | `status IS NOT NULL` (AND) |
+| `orEq(Field, val)` | `.orEq(Product::getStatus, "PENDING")` | `OR status = 'PENDING'` |
+| `orLike(Field, val)` | `.orLike(Product::getProductName, "iPad")` | `OR product_name LIKE '%iPad%'` |
+| `orStartsWith(Field, val)` | `.orStartsWith(Product::getProductName, "Air")` | `OR product_name LIKE 'Air%'` |
+| `orEndsWith(Field, val)` | `.orEndsWith(Product::getProductName, "Mini")` | `OR product_name LIKE '%Mini'` |
+| `orIn(Field, Collection)` | `.orIn(Product::getStatus, List.of("A", "B"))` | `OR status IN ('A', 'B')` |
 
 #### c) Nhóm Điều Kiện Phức Tạp (`and`, `or`)
 ```java
@@ -158,7 +163,7 @@ List<Product> list = productRepository.query()
     .eq(Product::getStatus, "ACTIVE")
     .and(sub -> sub
         .gt(Product::getPrice, 100.0)
-        .orEq(Product::getProductName, "Special")
+        .orLike(Product::getProductName, "Special")
     )
     .list();
 ```

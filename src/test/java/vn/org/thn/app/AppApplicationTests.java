@@ -29,19 +29,22 @@ class AppApplicationTests {
 		user.setFullName("Integration Test");
 		user.setRole("USER");
 		user.setStatus("ACTIVE");
-		user.setCreatedAt(LocalDateTime.now());
-		user.setUpdatedAt(LocalDateTime.now());
-		user.setCreatedBy("test");
-		user.setUpdatedBy("test");
-		user.setDeleted(false);
 
 		UserEntity saved = userRepository.save(user);
 		assertNotNull(saved.getId());
+		assertEquals("integration test", saved.getFullNameUnaccent(), "fullNameUnaccent should be auto-populated");
+		assertNotNull(saved.getCreatedAt(), "createdAt should be auto-populated");
+		assertNotNull(saved.getCreatedBy(), "createdBy should be auto-populated");
 
 		UserEntity found = userRepository.findById(saved.getId());
 		assertNotNull(found);
 		assertEquals("integration_test_user", found.getUsername());
 		assertEquals("test@example.com", found.getEmail());
+		assertEquals("integration test", found.getFullNameUnaccent());
+
+		vn.org.thn.app.modules.user.api.dto.UserResponse response = vn.org.thn.app.modules.user.api.dto.UserResponse.fromEntity(found);
+		assertNotNull(response.getCreatedAt());
+		assertNotNull(response.getCreatedBy());
 
 		userRepository.deleteById(saved.getId());
 		assertNull(userRepository.findById(saved.getId()));
