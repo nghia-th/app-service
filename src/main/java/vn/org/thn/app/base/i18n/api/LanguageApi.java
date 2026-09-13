@@ -41,9 +41,13 @@ import java.util.zip.ZipOutputStream;
  * <p>
  * {@link #addOrUpdate} validates every language code in the request against {@link #LANG_CODE_PATTERN}
  * before it ever reaches {@link LanguageService}: a language code eventually becomes part of a
- * file name ({@code lang/<code>.json}) in {@link LanguageService#updateLanguage}, and this endpoint
- * is unauthenticated (no security/JWT layer in {@code base} - see {@link vn.org.thn.app.base.IBase}),
- * so an unvalidated code would be a path-traversal opening (e.g. a code like {@code ../../evil}).
+ * file name ({@code lang/<code>.json}) in {@link LanguageService#updateLanguage}. That validation
+ * stays in place even though {@link #addOrUpdate} (and {@code delete}/{@code deletes}/
+ * {@code export}) now additionally requires the {@code ADMIN} role - enforced one layer up, in
+ * {@link vn.org.thn.app.base.security.SecurityAutoConfiguration#securityFilterChain} - since a
+ * malicious/compromised admin token is still worth defending against with input validation, not
+ * just role checks. Only the read endpoints ({@code list}/{@code {lang}}/all) stay public
+ * ({@code permitAll()}) in that same filter chain.
  */
 @RestController
 @RequestMapping("/public/language")

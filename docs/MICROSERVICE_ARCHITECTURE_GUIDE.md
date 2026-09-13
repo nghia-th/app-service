@@ -16,7 +16,7 @@ Tài liệu này định nghĩa **Quy chuẩn cấu trúc thư mục, nội dung
    - [3.2 Tầng Application (Application Layer)](#32-tầng-application-application-layer)
    - [3.3 Tầng Domain (Domain Layer)](#33-tầng-domain-domain-layer)
    - [3.4 Tầng Infrastructure (Infrastructure Layer)](#34-tầng-infrastructure-infrastructure-layer)
-4. [Quy Trình 7 Bước Phát Triển Module Mới (Developer Workflow)](#4-quy-trình-7-bước-phát-triển-module-mới-developer-workflow)
+4. [Quy Trình 8 Bước Phát Triển Module Mới (Developer Workflow)](#4-quy-trình-8-bước-phát-triển-module-mới-developer-workflow)
 5. [Chỉ Thị Dành Cho AI Coding Agent (AI Agent Execution Rules)](#5-chỉ-thị-dành-cho-ai-coding-agent-ai-agent-execution-rules)
 
 ---
@@ -36,6 +36,7 @@ src/main/java/vn/org/thn/app/
 │   ├── core/                             # ApiResponse, BaseEntity, BaseDTO, CommonErrorCode
 │   ├── i18n/                             # Module quản lý ngôn ngữ (LanguageApi, LanguageService, Translate)
 │   ├── persistence/                      # Custom ORM Engine (QueryBuilder, Executors, Dialects, Annotations)
+│   ├── security/                         # JWT Auth/Authorization 2 chế độ (STANDALONE/RESOURCE_SERVER) - xem BASE_FRAMEWORK_GUIDE.md mục 10
 │   ├── util/                             # JsonUtils, DateUtils, ValidationUtils, StringUtils
 │   └── web/                              # BaseCtl, GlobalExceptionHandler, RequestContextFilter
 │
@@ -94,6 +95,9 @@ src/main/java/vn/org/thn/app/
 | `base/persistence/logging/` | Ghi log câu lệnh SQL phát sinh và đo thời gian thực thi. | `SqlLogger`, `SqlLogLevel`, `SqlLogResult` |
 | `base/persistence/query/` | Bộ xây dựng câu lệnh SQL Fluent Type-Safe DSL cho `SELECT`, `UPDATE`, `DELETE`. | `QueryBuilder`, `UpdateBuilder`, `DeleteBuilder`, `BaseConditionBuilder`, `QueryCondition`, `QueryOrder` |
 | `base/persistence/repository/` | Class Repository trừu tượng gốc chứa toàn bộ các hàm thao tác CSDL. | `BaseRepository`, `BaseRepositoryImpl` |
+| `base/security/` | Cấu hình JWT Auth/Authorization 2 chế độ (`STANDALONE`/`RESOURCE_SERVER`), claims contract dùng chung, cấp phát & verify token. | `SecurityAutoConfiguration`, `JwtProperties`, `JwtMode`, `JwtClaimNames`, `CredentialAuthenticator`, `StandaloneTokenService`, `StandaloneRsaKeyProvider`, `PemUtils`, `EurekaJwkSetUriResolver` |
+| `base/security/api/` | REST API đăng nhập (chỉ hoạt động ở chế độ `STANDALONE`). | `AuthCtl` |
+| `base/security/api/dto/` | Request/Response DTO cho API đăng nhập. | `LoginRequest`, `LoginResponse` |
 | `base/util/` | Thư viện xử lý tiện ích hệ thống (JSON, String, Date, Validation). | `JsonUtils`, `StringUtils`, `DateUtils`, `ValidationUtils` |
 | `base/web/config/` | Đăng ký tự động các Filter và Interceptor cho Web MVC. | `BaseWebAutoConfiguration` |
 | `base/web/controller/` | Controller gốc cung cấp các hàm trả về kết quả chuẩn (`ok()`, `fail()`). | `BaseCtl` |
@@ -115,7 +119,8 @@ Mỗi thư mục con trong `modules/` đại diện cho một **Microservice Dom
 | `modules/<name>/domain/model/` | Chứa các Value Objects, Enums nghiệp vụ của module. | `UserRoleEnum.java` |
 | `modules/<name>/infrastructure/` | Chứa Repository triển khai thực tế CSDL và các HTTP Clients kết nối service ngoài. | `UserRepository.java` |
 | `modules/<name>/infrastructure/client/` | Chứa Feign Client hoặc RestClient gọi API sang các Microservice khác. | `OrderClient.java` |
-| `modules/<name>/infrastructure/security/` | Cấu hình bảo mật hoặc phân quyền riêng cho module. | `UserSecurityConfig.java` |
+| `modules/<name>/infrastructure/security/` | Cấu hình bảo mật/phân quyền riêng cho module, nếu module cần override hành vi mặc định của `base.security` (ví dụ 1 `SecurityFilterChain` hoặc `@PreAuthorize` phức tạp riêng - hiếm khi cần, vì phân quyền theo endpoint thường khai báo tập trung ở `base.security.SecurityAutoConfiguration#securityFilterChain`, xem `BASE_FRAMEWORK_GUIDE.md` mục 10.4). | `UserSecurityConfig.java` |
+| `modules/<name>/application/` (implement `base.security.CredentialAuthenticator`) | Cầu nối xác thực username/password sang dữ liệu thật của module - trả `Optional`/principal xác thực được cho `base.security.api.AuthCtl` dùng khi đăng nhập ở chế độ `STANDALONE`. **Lưu ý**: hiện đặt ở `application/` (cùng tầng Use Case, vì phụ thuộc trực tiếp `Repository` + `PasswordEncoder` của module) chứ không phải `infrastructure/security/` ở trên - đây là điểm chưa thống nhất hẳn giữa code thực tế và bảng quy chuẩn này, cần anh xác nhận lại quy ước mong muốn. | `UserCredentialAuthenticator.java` |
 
 ---
 
@@ -171,7 +176,7 @@ Mỗi thư mục con trong `modules/` đại diện cho một **Microservice Dom
 
 ---
 
-## 4. Quy Trình 7 Bước Phát Triển Module Mới (Developer Workflow)
+## 4. Quy Trình 8 Bước Phát Triển Module Mới (Developer Workflow)
 
 Khi cần phát triển một Microservice Module mới (Ví dụ: `Product`):
 
@@ -181,7 +186,8 @@ Khi cần phát triển một Microservice Module mới (Ví dụ: `Product`):
 4. **Bước 4 (Application)**: Tạo `ProductService.java` trong `modules/product/application/` xử lý CRUD & `QueryBuilder` với `@Transactional`.
 5. **Bước 5 (API Controller)**: Tạo `ProductCtl.java` trong `modules/product/api/` kế thừa `BaseCtl`, gắn `@Valid` tại các endpoint nhận body.
 6. **Bước 6 (Flyway SQL)**: Thêm file tạo bảng `database/<db_type>/V<N>__init_<module>.sql` đồng bộ cho 5 loại DB (`sqlite`, `postgresql`, `mysql`, `oracle`, `sqlserver`) kèm các cột audit chuẩn (bắt buộc tra cứu DDL Type Mapping tại `BASE_FRAMEWORK_GUIDE.md` mục 5.3).
-7. **Bước 7 (Unit Test)**: Thêm bài test tại `src/test/java/vn/org/thn/app/modules/product/ProductServiceTest.java`.
+7. **Bước 7 (Phân Quyền)**: Thêm rule cho `/public/product/**` vào `SecurityAutoConfiguration#securityFilterChain` (`base.security`, xem `BASE_FRAMEWORK_GUIDE.md` mục 10.4). Bỏ qua bước này không làm hỏng gì (mặc định `anyRequest().authenticated()` vẫn áp dụng), nhưng endpoint mới sẽ chỉ yêu cầu đăng nhập chứ không giới hạn đúng role mong muốn.
+8. **Bước 8 (Unit Test)**: Thêm bài test tại `src/test/java/vn/org/thn/app/modules/product/ProductServiceTest.java`.
 
 ---
 
@@ -196,3 +202,4 @@ Khi cần phát triển một Microservice Module mới (Ví dụ: `Product`):
 > 5. **Hỗ Trợ Đa CSDL & Chuẩn Hóa BaseEntity**: Mọi bảng nghiệp vụ mới bắt buộc kế thừa `BaseEntity` và có file migration SQL đồng bộ cho cả 5 loại DB (`sqlite`, `postgresql`, `mysql`, `oracle`, `sqlserver`) kèm đủ 5 cột audit. Luôn tận dụng cơ chế Auto-Audit tự động của `save()` / `saveAll()`, tuyệt đối không viết code gán ngày giờ hoặc người tạo thủ công trong Service.
 > 6. **Kiểm Thử Độc Lập**: Mỗi module tạo mới phải đi kèm file Unit Test tương ứng trong `src/test/java/vn/org/thn/app/modules/<module_name>/`.
 > 7. **Custom MyBatis XML Mappers**: Khi viết SQL phức tạp hoặc báo cáo JOIN nhiều bảng, tạo file XML tại `mapper/<Module>CustomMapper.xml`, tạo Interface `@Mapper` tại `modules/<name>/infrastructure/mapper/` và gọi thông qua `mapper(CustomMapper.class)` trong Repository.
+> 8. **Phân Quyền Endpoint Mới (bắt buộc, xem `BASE_FRAMEWORK_GUIDE.md` mục 10)**: mọi endpoint mới phải có rule tường minh trong `base.security.SecurityAutoConfiguration#securityFilterChain` (`.permitAll()` nếu công khai, `.hasRole(...)`/`.hasAnyRole(...)` nếu giới hạn theo vai trò) - không dựa vào default `anyRequest().authenticated()` để "đoán" ý định phân quyền.

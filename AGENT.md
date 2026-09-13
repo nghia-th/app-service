@@ -15,7 +15,7 @@ Trước khi thực hiện yêu cầu của người dùng, hãy mở và đọc
 
 2. 📗 **Hướng dẫn Cú pháp & ORM Framework**:
    👉 [BASE_FRAMEWORK_GUIDE.md](file:///Volumes/Data/04.MyProject/java-project/app-service/docs/BASE_FRAMEWORK_GUIDE.md)
-   *(Đọc file này để biết cách dùng `QueryBuilder`, `Save/Upsert`, `UpdateBuilder`, `DeleteBuilder`, Custom MyBatis Mapper, `BaseCtl`, `ApiResponse`, `@Transactional` và Flyway Migration).*
+   *(Đọc file này để biết cách dùng `QueryBuilder`, `Save/Upsert`, `UpdateBuilder`, `DeleteBuilder`, Custom MyBatis Mapper, `BaseCtl`, `ApiResponse`, `@Transactional` và Flyway Migration. **Mục 10** hướng dẫn riêng về JWT Auth/Authorization - đọc trước khi tạo endpoint mới hoặc đổi rule phân quyền).*
 
 3. 📙 **Tài liệu API Đa Ngôn Ngữ (i18n)**:
    👉 [LANGUAGE_API_GUIDE.md](file:///Volumes/Data/04.MyProject/java-project/app-service/docs/LANGUAGE_API_GUIDE.md)
@@ -29,7 +29,7 @@ Trước khi thực hiện yêu cầu của người dùng, hãy mở và đọc
 
 ## 🚨 2. Các Điều Luật Vàng Cho AI Agent (Golden Execution Rules)
 
-Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **bắt buộc tuân thủ 100%** 8 điều luật sau mà không có ngoại lệ:
+Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **bắt buộc tuân thủ 100%** 9 điều luật sau mà không có ngoại lệ:
 
 ### ⚡ Điều 1: Định Vị Package Chuẩn Microservice
 - Mọi class nghiệp vụ mới **phải nằm trong `vn.org.thn.app.modules.<module_name>.*`** (Ví dụ: `vn.org.thn.app.modules.user`, `vn.org.thn.app.modules.order`).
@@ -77,6 +77,11 @@ Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **b�
   export JAVA_HOME=/Users/truonghieunghia/Library/Java/JavaVirtualMachines/azul-17.0.20.1/Contents/Home && ./gradlew test --no-daemon
   ```
 
+### ⚡ Điều 9: Phân Quyền Endpoint Bắt Buộc (Security/JWT)
+- Từ 2026-09-13, `base` mang theo sẵn hệ thống JWT Auth/Authorization 2 chế độ (`base.security.*`, xem `BASE_FRAMEWORK_GUIDE.md` mục 10) - **mặc định mọi endpoint chưa khai báo rule đều yêu cầu token hợp lệ** (`anyRequest().authenticated()` trong `SecurityAutoConfiguration#securityFilterChain`).
+- Khi tạo endpoint/module mới, **bắt buộc** thêm rule tường minh vào `securityFilterChain`: `.permitAll()` nếu endpoint cố ý công khai, `.hasRole(...)`/`.hasAnyRole(...)` nếu giới hạn theo vai trò. Không dựa vào hành vi mặc định để suy ra ý định phân quyền.
+- **TUYỆT ĐỐI KHÔNG** đọc thông tin user hiện tại (cho audit log hay bất kỳ mục đích gì) từ header client tự gửi (`X-User-Id`, `X-Username`...) - đây chính là lỗ hổng Critical #2 đã bị vá; luôn dùng `SecurityContextHolder.getContext().getAuthentication()` hoặc helper `RequestContextFilter.resolveUser(request)` đã có sẵn trong `base`.
+
 ---
 
 ## 🚫 3. Các Anti-Pattern Bắt Buộc Tránh (What NOT To Do)
@@ -95,6 +100,8 @@ Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **b�
 | Tự gán tay các trường audit (`setCreatedAt`, `setUpdatedAt`...) trong Service | Để `save()` và `saveAll()` của framework tự động điền qua cơ chế Auto-Audit của `BaseEntity`. | Tránh mã nguồn thừa thãi (boilerplate), đảm bảo tính nhất quán và bảo vệ dữ liệu audit gốc không bị ghi đè. |
 | Viết trực tiếp câu lệnh SQL dạng String trong Controller hoặc Service | Sử dụng `QueryBuilder` hoặc viết Custom MyBatis XML Mapper. | Đảm bảo tính đóng gói, dễ bảo trì và ngăn ngừa SQL Injection. |
 | Sửa đổi file `mapper/DynamicSQL.xml` | Tạo file mapper mới `mapper/<Module>CustomMapper.xml`. | `DynamicSQL.xml` là core engine của ORM framework. |
+| Tạo endpoint mới mà không thêm rule vào `securityFilterChain` | Luôn khai báo `.permitAll()` hoặc `.hasRole(...)`/`.hasAnyRole(...)` tường minh cho path mới trong `base.security.SecurityAutoConfiguration`. | Mặc định `anyRequest().authenticated()` sẽ áp dụng - endpoint vẫn chạy nhưng có thể yêu cầu/không yêu cầu đúng quyền như ý định ban đầu. |
+| Đọc thông tin user từ header client tự gửi (`X-User-Id`, `X-Username`...) cho audit log/phân quyền | Dùng `SecurityContextHolder.getContext().getAuthentication()` hoặc `RequestContextFilter.resolveUser(request)`. | Header client tự gửi không qua xác thực, dễ bị giả mạo (đây chính là Critical #2 đã bị vá 2026-09-13). |
 
 ---
 
@@ -133,6 +140,7 @@ Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **b�
 │   │   ├── core/                          # ApiResponse, BaseEntity, BaseDTO, BusinessException
 │   │   ├── i18n/                          # Module dịch thuật đa ngôn ngữ
 │   │   ├── persistence/                   # ORM Engine (QueryBuilder, Executors, Dialects)
+│   │   ├── security/                      # JWT Auth/Authorization 2 chế độ (xem BASE_FRAMEWORK_GUIDE.md mục 10)
 │   │   ├── util/                          # JsonUtils, DateUtils, ValidationUtils
 │   │   └── web/                           # BaseCtl, GlobalExceptionHandler, ContextFilter
 │   │
@@ -176,4 +184,4 @@ Khi nhận yêu cầu tạo mới hoặc sửa đổi một module nghiệp vụ
 
 ---
 
-> 🎯 **Ghi nhớ**: "Luôn đọc tài liệu trước - Tuân thủ 8 điều luật vàng - Tránh anti-patterns - Chạy kiểm thử thành công trước khi báo cáo kết quả."
+> 🎯 **Ghi nhớ**: "Luôn đọc tài liệu trước - Tuân thủ 9 điều luật vàng - Tránh anti-patterns - Chạy kiểm thử thành công trước khi báo cáo kết quả."

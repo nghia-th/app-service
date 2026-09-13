@@ -5,6 +5,7 @@ Tài liệu chi tiết toàn bộ các Endpoint thuộc phân hệ quản lý ng
 - **Base URL**: `/public/language`
 - **Định dạng dữ liệu**: `JSON` (UTF-8)
 - **Chuẩn Cấu Trúc Response**: Tất cả các API đều trả về dạng `ApiResponse<T>` chuẩn.
+- **Xác thực**: 3 endpoint đọc (`GET`) công khai, không cần token. 4 endpoint ghi (thêm/sửa/xóa/export) yêu cầu JWT hợp lệ với role `ADMIN` - gửi header `Authorization: Bearer <accessToken>`, lấy token qua `POST /public/auth/login` (xem `BASE_FRAMEWORK_GUIDE.md` mục 10). Chi tiết từng endpoint xem bảng ở mục 2.
 
 ---
 
@@ -44,15 +45,15 @@ Khi ứng dụng khởi chạy, `LanguageService.loadLanguage()` thực hiện n
 
 ## 2. Danh Sách Các Endpoint API
 
-| Method | Endpoint | Mô tả |
-|---|---|---|
-| `GET` | `/public/language/list` | Lấy danh sách tất cả các từ khóa dịch (có hỗ trợ tìm kiếm `keyword`) |
-| `GET` | `/public/language` | Lấy toàn bộ bản dịch của tất cả ngôn ngữ |
-| `GET` | `/public/language/{lang}` | Lấy toàn bộ từ khóa dịch của một ngôn ngữ cụ thể (ví dụ `/vi`, `/en`) |
-| `POST` / `PUT` | `/public/language` | Thêm mới hoặc cập nhật giá trị dịch cho từ khóa |
-| `DELETE` | `/public/language` | Xóa 1 từ khóa dịch |
-| `DELETE` | `/public/language/deletes` | Xóa nhiều từ khóa dịch cùng lúc |
-| `POST` | `/public/language/export` | Tải xuống file zip chứa toàn bộ file JSON ngôn ngữ (`lang.zip`) |
+| Method | Endpoint | Mô tả | Yêu Cầu Xác Thực |
+|---|---|---|---|
+| `GET` | `/public/language/list` | Lấy danh sách tất cả các từ khóa dịch (có hỗ trợ tìm kiếm `keyword`) | Công khai |
+| `GET` | `/public/language` | Lấy toàn bộ bản dịch của tất cả ngôn ngữ | Công khai |
+| `GET` | `/public/language/{lang}` | Lấy toàn bộ từ khóa dịch của một ngôn ngữ cụ thể (ví dụ `/vi`, `/en`) | Công khai |
+| `POST` / `PUT` | `/public/language` | Thêm mới hoặc cập nhật giá trị dịch cho từ khóa | 🔒 `ADMIN` |
+| `DELETE` | `/public/language` | Xóa 1 từ khóa dịch | 🔒 `ADMIN` |
+| `DELETE` | `/public/language/deletes` | Xóa nhiều từ khóa dịch cùng lúc | 🔒 `ADMIN` |
+| `POST` | `/public/language/export` | Tải xuống file zip chứa toàn bộ file JSON ngôn ngữ (`lang.zip`) | 🔒 `ADMIN` |
 
 ---
 
@@ -169,6 +170,7 @@ Host: localhost:8080
 ```http
 POST /public/language HTTP/1.1
 Content-Type: application/json
+Authorization: Bearer <accessToken của user role ADMIN>
 
 {
   "langKey": "common.welcome",
@@ -199,6 +201,7 @@ Content-Type: application/json
 ```http
 DELETE /public/language HTTP/1.1
 Content-Type: application/json
+Authorization: Bearer <accessToken của user role ADMIN>
 
 "common.welcome"
 ```
@@ -223,6 +226,7 @@ Content-Type: application/json
 ```http
 DELETE /public/language/deletes HTTP/1.1
 Content-Type: application/json
+Authorization: Bearer <accessToken của user role ADMIN>
 
 [
   "button.save",
@@ -251,6 +255,7 @@ Content-Type: application/json
 ```http
 POST /public/language/export HTTP/1.1
 Host: localhost:8080
+Authorization: Bearer <accessToken của user role ADMIN>
 ```
 
 ---
@@ -260,4 +265,8 @@ Host: localhost:8080
 | Error Code | HTTP Status | Mô tả |
 |---|---|---|
 | `VAL_001` | `400 Bad Request` | Dữ liệu đầu vào không hợp lệ (ví dụ `langKey` trống hoặc `lang` chứa ký tự nguy hiểm/path traversal) |
+| `COMMON_003` | `401 Unauthorized` | Thiếu header `Authorization`, token hết hạn, hoặc token không hợp lệ (chỉ áp dụng cho 4 endpoint ghi ở mục 2). |
+| `COMMON_004` | `403 Forbidden` | Token hợp lệ nhưng user không có role `ADMIN`. |
 | `INT_001` | `500 Internal Error` | Lỗi máy chủ chưa được xử lý |
+
+> Lưu ý: mã `VAL_001`/`INT_001` ở trên là mã đã có từ trước trong tài liệu này, nhưng không khớp với `CommonErrorCode` thực tế trong code (`COMMON_001`/`COMMON_999`) - có thể là tài liệu chưa được cập nhật theo đúng convention `COMMON_xxx`, không liên quan tới đợt bổ sung xác thực JWT lần này. Riêng 2 mã `COMMON_003`/`COMMON_004` mới thêm ở trên đã đối chiếu đúng với `CommonErrorCode.java`.

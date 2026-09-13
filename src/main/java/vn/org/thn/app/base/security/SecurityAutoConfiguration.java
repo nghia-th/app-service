@@ -8,10 +8,12 @@ import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigureOrder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.Ordered;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -37,16 +39,30 @@ import org.springframework.security.web.SecurityFilterChain;
  * {@link StandaloneTokenService} beans here are specific to {@link JwtMode#STANDALONE} - that mode
  * signs its own tokens locally, so it needs no counterpart in {@link JwtMode#RESOURCE_SERVER}, which
  * never signs anything. Both modes register a {@link JwtDecoder}, but never at the same time: the
- * two {@code jwtDecoder} bean methods below are mutually exclusive on the same
- * {@code base.security.jwt.mode} property - {@link JwtMode#STANDALONE} verifies with the local key
+ * {@link #standaloneJwtDecoder}/{@link #resourceServerJwtDecoder} bean methods below are
+ * mutually exclusive on the same {@code base.security.jwt.mode} property (each named distinctly,
+ * rather than overloaded on the same {@code jwtDecoder} name, because {@code @Configuration}'s
+ * {@code enforceUniqueMethods} check rejects overloaded {@code @Bean} methods regardless of their
+ * runtime-mutually-exclusive conditions) - {@link JwtMode#STANDALONE} verifies with the local key
  * pair's public half, {@link JwtMode#RESOURCE_SERVER} verifies via a remote JWKS (see
  * {@link EurekaJwkSetUriResolver}).
  * <p>
  * {@link #securityFilterChain} carries the real per-endpoint authorization rules - see its own
  * javadoc - built following the design discussion after the 2026-09-12 review's Critical
  * finding #2.
+ * <p>
+ * {@code @AutoConfigureOrder(HIGHEST_PRECEDENCE)}: {@code spring-boot-starter-security} pulls in
+ * Spring Boot's own default web-security auto-configuration, which registers a lock-everything
+ * {@code SecurityFilterChain} (httpBasic + formLogin) guarded by
+ * {@code @ConditionalOnMissingBean(SecurityFilterChain.class)}. Without an explicit order, whichever
+ * of the two auto-configuration classes gets processed first wins, and Boot's own class carries no
+ * {@code @AutoConfigureOrder} of its own - so without forcing this one first, {@link #securityFilterChain}
+ * here can lose the race and back off entirely, leaving every endpoint (including the ones this class
+ * intends as {@code permitAll()}, e.g. Swagger UI) behind Boot's default login. Highest precedence here
+ * guarantees this class's bean is registered before Boot's default is even evaluated.
  */
 @AutoConfiguration
+@AutoConfigureOrder(Ordered.HIGHEST_PRECEDENCE)
 @EnableConfigurationProperties(JwtProperties.class)
 @EnableMethodSecurity
 public class SecurityAutoConfiguration {
@@ -81,7 +97,7 @@ public class SecurityAutoConfiguration {
     /** Verifies tokens with the public half of the same key pair {@link #jwtEncoder} signs with - no JWKS round trip needed, this service already holds the key. */
     @Bean
     @ConditionalOnProperty(prefix = "base.security.jwt", name = "mode", havingValue = "STANDALONE", matchIfMissing = true)
-    public JwtDecoder jwtDecoder(StandaloneRsaKeyProvider keyProvider) {
+    public JwtDecoder standaloneJwtDecoder(StandaloneRsaKeyProvider keyProvider) {
         return NimbusJwtDecoder.withPublicKey(keyProvider.getPublicKey()).build();
     }
 
@@ -100,7 +116,7 @@ public class SecurityAutoConfiguration {
      */
     @Bean
     @ConditionalOnProperty(prefix = "base.security.jwt", name = "mode", havingValue = "RESOURCE_SERVER")
-    public JwtDecoder jwtDecoder(JwtProperties properties) {
+    public JwtDecoder resourceServerJwtDecoder(JwtProperties properties) {
         String jwkSetUri = new EurekaJwkSetUriResolver(properties.getResourceServer()).resolveJwkSetUri();
         return NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
     }

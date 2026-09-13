@@ -25,6 +25,7 @@ Tài liệu này cung cấp đầy đủ hướng dẫn kiến trúc, quy tắc 
 7. [Hướng Dẫn Viết Unit Test](#7-hướng-dẫn-viết-unit-test)
 8. [Swagger UI & Cấu Hình Bí Mật (Secrets)](#8-swagger-ui--cấu-hình-bí-mật-secrets)
 9. [Mẫu Hướng Dẫn Phát Triển Tính Năng Mới (Recipe for AI Agent)](#9-mẫu-hướng-dẫn-phát-triển-tính-năng-mới-recipe-for-ai-agent)
+10. [Xác Thực & Phân Quyền (JWT Security)](#10-xác-thực--phân-quyền-jwt-security)
 
 ---
 
@@ -39,6 +40,7 @@ vn.org.thn.app.base
 ├── core                 # DTO, Entity gốc, Exception, ApiResponse
 ├── i18n                 # Module đa ngôn ngữ (API, Service, Domain)
 ├── persistence          # Custom ORM Engine (Annotations, DSL Query, Executors, Dialects)
+├── security             # JWT Auth/Authorization 2 chế độ (STANDALONE/RESOURCE_SERVER) - xem mục 10
 ├── util                 # Utilities (JsonUtils, StringUtils, DateUtils, ValidationUtils)
 └── web                  # Controller gốc (BaseCtl), Filters, GlobalExceptionHandler
 ```
@@ -768,6 +770,7 @@ public class UserServiceTest {
 Khi ứng dụng khởi chạy (mặc định port `8080`):
 - **Giao diện Swagger UI**: `http://localhost:8080/api.html`
 - **OpenAPI Json Docs**: `http://localhost:8080/doc`
+- Cả 2 đường dẫn trên (và `/swagger-ui/**`, `/v3/api-docs/**`, `/webjars/**`) đều được khai báo `permitAll()` tường minh trong `SecurityAutoConfiguration#securityFilterChain` (xem mục 10) - không cần token để xem tài liệu API, kể cả khi mọi endpoint nghiệp vụ khác đã yêu cầu xác thực.
 
 ### 8.2 Cấu Hình Bí Mật (`config/secrets.yaml`)
 Để tránh lộ mật khẩu CSDL hoặc API Key lên Git repository:
@@ -786,4 +789,73 @@ Khi ứng dụng khởi chạy (mặc định port `8080`):
 > 4. **Tạo Service**: `vn.org.thn.app.modules.order.application.OrderService` xử lý logic nghiệp vụ và phân trang với `@Transactional`.
 > 5. **Tạo Controller**: `vn.org.thn.app.modules.order.api.OrderCtl` kế thừa `BaseCtl`, gắn `@RestController`, `@RequestMapping("/public/order")`, kèm chú thích Swagger `@Tag` và `@Operation`.
 > 6. **Tạo Migration SQL**: Thêm file `database/<db_type>/V<N>__init_order.sql`.
-> 7. **Tạo Unit Test**: Thêm `src/test/java/vn/org/thn/app/modules/order/OrderServiceTest.java`.
+> 7. **Khai Báo Phân Quyền Endpoint** (bắt buộc, xem mục 10.4): thêm rule tương ứng cho `/public/order/**` vào `SecurityAutoConfiguration#securityFilterChain` (`base.security`). Mặc định mọi endpoint chưa khai báo đều yêu cầu token hợp lệ (`anyRequest().authenticated()`) - nếu quên bước này, endpoint mới **vẫn chạy được nhưng sẽ luôn đòi token**, kể cả khi ý định là để public; ngược lại nếu định giới hạn theo role mà quên khai báo, endpoint sẽ chỉ cần đăng nhập (bất kỳ role nào) thay vì đúng role mong muốn.
+> 8. **Tạo Unit Test**: Thêm `src/test/java/vn/org/thn/app/modules/order/OrderServiceTest.java`.
+---
+
+## 10. Xác Thực & Phân Quyền (JWT Security)
+
+Từ bản vá Critical #2 (rà soát 2026-09-12, xử lý 2026-09-13), `base` mang theo sẵn một hệ thống JWT authentication/authorization 2 chế độ (`vn.org.thn.app.base.security`), tự động đăng ký qua `SecurityAutoConfiguration` (cùng cơ chế auto-configuration như `BaseWebAutoConfiguration`/`LanguageAutoConfiguration` - xem mục 1). Mọi service kế thừa `base` đều có sẵn, không cần cấu hình gì thêm để bật.
+
+### 10.1 Hai Chế Độ (`base.security.jwt.mode`)
+
+| Chế độ | Khi nào dùng | Cách hoạt động |
+|---|---|---|
+| `STANDALONE` (mặc định) | Service tự đứng một mình, hoặc là service duy nhất phát hành token trong hệ thống. | Tự sinh **và** tự verify JWT (RS256) bằng 1 cặp khoá RSA đọc từ file PEM. `POST /public/auth/login` (public) đăng nhập username/password, trả JWT. |
+| `RESOURCE_SERVER` | Có 1 microservice xác thực riêng (đăng ký qua Eureka) phát hành token; service này chỉ tiêu thụ. | Chỉ **verify** JWT do service kia ký, lấy JWKS qua Eureka (`EurekaJwkSetUriResolver` - tự tra Eureka REST API, không cần Spring Cloud Eureka Client). Không có endpoint login, không tự sinh token. |
+
+Ví dụ cấu hình đầy đủ:
+```yaml
+base:
+  security:
+    jwt:
+      mode: STANDALONE                    # hoặc RESOURCE_SERVER
+      standalone:
+        private-key-path: ./config/keys/dev-jwt-private.pem
+        public-key-path: ./config/keys/dev-jwt-public.pem
+      resource-server:
+        jwk-set-uri:                      # optional - override trực tiếp, bỏ qua tra cứu Eureka nếu set
+        eureka-service-id: auth-service   # tên service xác thực đăng ký trên Eureka
+        eureka-server-url: http://localhost:8761/eureka
+        jwk-set-path: /.well-known/jwks.json
+```
+
+Ở chế độ `STANDALONE`, nếu thiếu file khoá PEM, service **tự sinh** một cặp khoá mới - nhưng **chỉ trên profile `dev`/`test`**; các profile khác (`staging`/`prod`) sẽ **fail-fast ngay lúc khởi động** thay vì âm thầm sinh khoá mới (sinh khoá mới sẽ vô hiệu hoá mọi token cũ đang được client giữ). File khoá tự sinh nằm ở `config/keys/` - đã thêm vào `.gitignore`, không được commit.
+
+### 10.2 Claims Contract Dùng Chung (`JwtClaimNames`)
+
+Cả 2 chế độ đọc/ghi cùng 1 bộ claim, để chuyển đổi chế độ chỉ cần đổi config, không đổi code nghiệp vụ:
+- `sub`: username.
+- `userId`: id thực thể user (không nhất thiết là số nguyên - tuỳ domain).
+- `authorities`: **mảng JSON** các authority string đúng định dạng Spring Security, ví dụ `["ROLE_ADMIN"]` (không phải 1 chuỗi role đơn). **Không dùng role hierarchy** (`ROLE_ADMIN` không tự động bao hàm `ROLE_USER`) - mỗi endpoint phải khai báo tường minh mọi role được phép, xem `hasAnyRole(...)` ở mục 10.4.
+
+### 10.3 Đăng Nhập (chỉ tồn tại ở chế độ `STANDALONE`)
+
+`POST /public/auth/login` (public, không cần token) - nhận `{ "username", "password" }`, trả `{ "accessToken", "tokenType": "Bearer", "expiresIn" }`.
+
+Việc xác thực username/password không nằm trong `base` (vì `base` không biết gì về `UserEntity`/CSDL của service) - `base` chỉ định nghĩa interface `CredentialAuthenticator`, mỗi service tự cung cấp implementation (`@Component`) bridge sang dữ liệu thật của mình. Ví dụ tham chiếu: `vn.org.thn.app.modules.user.application.UserCredentialAuthenticator`, dùng `UserRepository` + `PasswordEncoder` (bean có sẵn từ `SecurityAutoConfiguration`, BCrypt mặc định).
+
+`CredentialAuthenticator.authenticate(username, password)` **luôn trả `null`** cho mọi lý do thất bại (không tìm thấy username / sai mật khẩu / tài khoản inactive / chưa có mật khẩu) - tránh lộ thông tin qua thông báo lỗi khác nhau (username enumeration).
+
+### 10.4 Bảo Vệ Endpoint Mới - Bắt Buộc Khi Thêm Module
+
+`SecurityAutoConfiguration#securityFilterChain` khai báo rule theo từng path/method. **Mặc định `anyRequest().authenticated()`** áp dụng cho mọi endpoint chưa được khai báo tường minh - nghĩa là một endpoint mới tạo ra, nếu không thêm rule, sẽ tự động yêu cầu **có** token hợp lệ (nhưng không giới hạn role cụ thể nào). Khi tạo module mới theo Recipe ở mục 9, luôn thêm rule tương ứng:
+
+```java
+.requestMatchers(HttpMethod.GET, "/public/order/**").hasAnyRole("USER", "ADMIN")
+.requestMatchers(HttpMethod.POST, "/public/order").hasRole("ADMIN")
+.requestMatchers(HttpMethod.PUT, "/public/order/**").hasRole("ADMIN")
+.requestMatchers(HttpMethod.DELETE, "/public/order/**").hasRole("ADMIN")
+```
+
+Nếu endpoint thực sự cần public (không cần đăng nhập), khai báo `.permitAll()` tường minh thay vì để lọt vào `anyRequest()`.
+
+`@EnableMethodSecurity` đã được bật sẵn ở `SecurityAutoConfiguration`, nên cũng có thể dùng `@PreAuthorize("hasRole('ADMIN')")` trực tiếp trên method của Controller/Service - dùng khi rule phụ thuộc vào logic phức tạp hơn path/method HTTP đơn thuần (ví dụ chỉ chủ sở hữu resource mới được sửa).
+
+### 10.5 Đọc Thông Tin User Hiện Tại (Audit Log, v.v.)
+
+Dùng chuẩn Spring Security: `SecurityContextHolder.getContext().getAuthentication()`. `base` có sẵn helper `RequestContextFilter.resolveUser(request)` (dùng để gán `created_by`/`updated_by` cho audit log ở `BaseEntity`) - hàm này đọc thẳng từ `SecurityContextHolder` (đã được Spring Security xác thực qua JWT), **không đọc bất kỳ header nào client tự gửi** kể từ bản vá Critical #2 (trước đó tin thẳng các header như `X-User-Id`/`X-Username` không qua kiểm chứng - đây chính là lỗ hổng gốc của finding này).
+
+### 10.6 Viết Test Cho Endpoint Có Bảo Vệ
+
+Dùng `spring-security-test` (đã có sẵn trong `build.gradle`) - ví dụ `@WithMockUser(roles = "ADMIN")` cho test loại `@WebMvcTest`/`@SpringBootTest`, hoặc build `Authentication`/`Jwt` giả bằng tay cho unit test thuần Mockito không cần context Spring. Tham khảo các test có sẵn: `AuthCtlTest`, `RequestContextFilterResolveUserTest`, `StandaloneTokenServiceTest`, `StandaloneRsaKeyProviderTest`, `EurekaJwkSetUriResolverTest`, `PemUtilsTest` (tất cả ở `src/test/java/vn/org/thn/app/base/security/` và `base/web/filter/`).

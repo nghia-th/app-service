@@ -16,8 +16,12 @@ public final class CommonConstants {
 
     /**
      * Standard "Authorization" HTTP header name, for a consuming service that reads/writes it
-     * manually (this module itself carries no security/JWT logic - see {@link vn.org.thn.app.base.IBase}'s
-     * javadoc for why that responsibility was dropped from {@code base}).
+     * manually (e.g. tests, manual HTTP client calls). {@code base} does carry its own JWT
+     * authentication/authorization now ({@link vn.org.thn.app.base.security.SecurityAutoConfiguration}
+     * and the rest of {@code base.security.*}, added 2026-09-13 for the 2026-09-12 review's Critical
+     * finding #2) - but Spring Security's OAuth2 resource server filter parses this header
+     * internally via its own {@code BearerTokenResolver}, so that path doesn't go through this
+     * constant.
      */
     public static final String AUTHORIZATION_HEADER = "Authorization";
 

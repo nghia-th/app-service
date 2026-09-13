@@ -12,10 +12,12 @@ import java.util.List;
  * <p>
  * Backs {@link BaseWebAutoConfiguration#corsConfigurer}. Previously this policy was hardcoded with
  * no way to tighten it for staging/prod short of overriding the whole {@code WebMvcConfigurer} bean
- * - see the CORS Low finding (2026-09-12 review). The default here is unchanged (still fully
- * permissive, since there is no auth layer yet - see Critical finding #2), but a consuming service
- * can now narrow {@code allowed-origin-patterns} (and the rest) per environment via
- * application-*.yaml, with no code change or bean override needed.
+ * - see the CORS Low finding (2026-09-12 review). The default here is still fully permissive
+ * ({@code "*"}); that was originally justified by there being no auth layer yet (Critical finding
+ * #2), but that finding is now resolved ({@code base.security.*}, 2026-09-13). A consuming service
+ * can narrow {@code allowed-origin-patterns} (and the rest) per environment via application-*.yaml,
+ * with no code change or bean override needed - and should do so before production, now that
+ * requests carry real bearer tokens worth protecting from arbitrary origins.
  */
 @ConfigurationProperties(prefix = "base.web.cors")
 public class CorsProperties {
