@@ -1,2 +1,3 @@
 vn.org.thn.app.base.web.config.BaseWebAutoConfiguration
 vn.org.thn.app.base.i18n.config.LanguageAutoConfiguration
+vn.org.thn.app.base.security.SecurityAutoConfiguration

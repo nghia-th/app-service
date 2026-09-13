@@ -139,7 +139,7 @@ public class LanguageApi extends BaseCtl {
     /** Every language's translations at once, keyed by language code then langKey. */
     @Operation(
             summary = "Get all language translations",
-            description = "Get nested map of all language codes to their key-value translations"
+            description = "Get nested map of all language codes to their  key-value translations"
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully retrieved all translations")

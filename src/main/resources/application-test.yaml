@@ -14,6 +14,12 @@ base:
     sqlite:
       file-name: test_app.db
 
+  security:
+    jwt:
+      standalone:
+        private-key-path: ./config/keys/test-jwt-private.pem
+        public-key-path: ./config/keys/test-jwt-public.pem
+
 logging:
   level:
     root: WARN

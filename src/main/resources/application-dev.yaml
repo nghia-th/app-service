@@ -25,6 +25,15 @@ base:
     sqlite:
       file-name: dev_app.db
 
+  # base.security.jwt.mode defaults to STANDALONE (see JwtProperties) - no need to set it here.
+  # Key pair auto-generates once on this profile if missing (StandaloneRsaKeyProvider) and is then
+  # reused on every later restart, so a freshly-cloned dev machine works with zero manual setup.
+  security:
+    jwt:
+      standalone:
+        private-key-path: ./config/keys/dev-jwt-private.pem
+        public-key-path: ./config/keys/dev-jwt-public.pem
+
 logging:
   level:
     root: INFO

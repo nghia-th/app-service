@@ -9,6 +9,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import vn.org.thn.app.base.core.constant.CommonConstants;
 
 import java.io.IOException;
@@ -53,8 +56,6 @@ public class RequestContextFilter implements Filter {
     private static final java.util.regex.Pattern SENSITIVE_FIELD_PATTERN =
             java.util.regex.Pattern.compile("(?i)\"(password|passwd|secret|token|accessToken|refreshToken|clientSecret)\"\\s*:\\s*(\"[^\"]*\"|[^,}\\s]+)");
 
-    private static final String[] USER_HEADERS = {"X-User-Id", "X-Username", "username", "user"};
-
     /** Runs once per request: populates MDC, logs the request line (+ body when small enough to be safe), delegates downstream, then always clears MDC. */
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
@@ -91,14 +92,26 @@ public class RequestContextFilter implements Filter {
         }
     }
 
+    /**
+     * The authenticated caller's username, from Spring Security's {@link SecurityContextHolder}
+     * (populated by the OAuth2 resource server filter earlier in the chain from a verified JWT's
+     * {@code sub} claim - see {@code base.security.SecurityAutoConfiguration#securityFilterChain}),
+     * or {@code null} for an anonymous/unauthenticated request.
+     * <p>
+     * Previously trusted a set of client-supplied headers ({@code X-User-Id}, {@code X-Username},
+     * {@code username}, {@code user}) with no verification at all - any caller could claim to be
+     * anyone, including "admin", for both the audit trail below and anything else that read
+     * {@link vn.org.thn.app.base.core.context.UserContext} (2026-09-12 review's Critical finding
+     * #2). The {@code request} parameter is now unused for this purpose but kept so this remains a
+     * drop-in replacement at its one call site.
+     */
     public static String resolveUser(HttpServletRequest request) {
-        for (String header : USER_HEADERS) {
-            String value = request.getHeader(header);
-            if (value != null && !value.isBlank()) {
-                return value.trim();
-            }
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            return null;
         }
-        return null;
+        return authentication.getName();
     }
 
     private static boolean isSensitivePath(String uri) {

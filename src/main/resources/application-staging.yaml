@@ -29,6 +29,19 @@ base:
       # khi có domain frontend thật, vì hiện chưa có lớp auth (xem Critical #2 trong review).
       allowed-origin-patterns: ${STAGING_CORS_ALLOWED_ORIGINS:*}
 
+  # base.security.jwt.mode=STANDALONE (the default) requires these two PEM files to already exist
+  # on this profile - StandaloneRsaKeyProvider fails startup fast instead of auto-generating a key
+  # here (see its javadoc). Set real paths via config/secrets-staging.yaml (see spring.config.import
+  # in application.yaml) or environment-specific deployment config, never commit real keys here.
+  # If a separate auth microservice exists for this environment, set
+  # base.security.jwt.mode=RESOURCE_SERVER instead and configure base.security.jwt.resource-server.*
+  # (eureka-service-id or jwk-set-uri) - these standalone properties are then unused.
+  # security:
+  #   jwt:
+  #     standalone:
+  #       private-key-path: /path/to/staging-jwt-private.pem
+  #       public-key-path: /path/to/staging-jwt-public.pem
+
 logging:
   level:
     root: INFO

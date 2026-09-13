@@ -42,3 +42,6 @@ out/
 /config/secrets.yaml
 /config/secrets-*.yaml
 !/config/secrets.yaml.example
+
+### JWT signing keys (auto-generated locally on dev/test, see StandaloneRsaKeyProvider) ###
+/config/keys/

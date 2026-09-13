@@ -2,6 +2,7 @@ package vn.org.thn.app.modules.user.application;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.org.thn.app.base.core.dto.page.PageResponse;
@@ -21,6 +22,14 @@ public class UserService {
 
     @Autowired
     private UserRepository userRepository;
+
+    /**
+     * Hashes {@link UserCreateRequest#getPassword()} before it's ever persisted (see
+     * {@code UserEntity#password}'s javadoc) - the same {@code PasswordEncoder} bean
+     * {@code base.security} registers for standalone-mode login to verify against later.
+     */
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     public PageResponse<UserResponse> getUsersPaged(int page, int size, String keyword, String status) {
         var query = userRepository.query();
@@ -83,6 +92,7 @@ public class UserService {
         entity.setFullName(request.getFullName());
         entity.setRole(request.getRole() != null ? request.getRole() : "USER");
         entity.setStatus("ACTIVE");
+        entity.setPassword(passwordEncoder.encode(request.getPassword()));
 
         // The existsByUsername/existsByEmail checks above are check-then-act and can race with a
         // concurrent create for the same username/email; the DB's UNIQUE constraints are the real

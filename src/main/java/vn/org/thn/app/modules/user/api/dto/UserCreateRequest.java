@@ -29,4 +29,9 @@ public class UserCreateRequest {
 
     @Schema(description = "Vai trò (ADMIN / USER)", example = "USER")
     private String role;
+
+    @NotBlank(message = "Password must not be blank")
+    @Size(min = 8, max = 100, message = "Password must be between 8 and 100 characters")
+    @Schema(description = "Mật khẩu đăng nhập (dùng cho base.security.jwt.mode=STANDALONE) - chỉ nhận khi tạo, không bao giờ trả lại trong response", example = "S3curePass!")
+    private String password;
 }

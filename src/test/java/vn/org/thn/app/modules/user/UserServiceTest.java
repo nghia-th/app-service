@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import vn.org.thn.app.base.core.exception.BusinessException;
 import vn.org.thn.app.modules.user.api.dto.UserCreateRequest;
 import vn.org.thn.app.modules.user.api.dto.UserResponse;
@@ -26,16 +27,20 @@ class UserServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
     @InjectMocks
     private UserService userService;
 
     @Test
     @DisplayName("Should create user successfully when username and email do not exist")
     void createUser_validRequest_returnsUserResponse() {
-        UserCreateRequest request = new UserCreateRequest("john_doe", "john@example.com", "John Doe", "USER");
+        UserCreateRequest request = new UserCreateRequest("john_doe", "john@example.com", "John Doe", "USER", "S3curePass!");
 
         when(userRepository.existsByUsername("john_doe")).thenReturn(false);
         when(userRepository.existsByEmail("john@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("S3curePass!")).thenReturn("$2a$10$placeholderHashNotARealBcryptHash");
         when(userRepository.save(any(UserEntity.class))).thenAnswer(i -> {
             UserEntity entity = i.getArgument(0);
             entity.setId(1L);
@@ -59,7 +64,7 @@ class UserServiceTest {
     @Test
     @DisplayName("Should throw BusinessException when username already exists")
     void createUser_duplicateUsername_throwsBusinessException() {
-        UserCreateRequest request = new UserCreateRequest("john_doe", "john@example.com", "John Doe", "USER");
+        UserCreateRequest request = new UserCreateRequest("john_doe", "john@example.com", "John Doe", "USER", "S3curePass!");
 
         when(userRepository.existsByUsername("john_doe")).thenReturn(true);
 
@@ -71,7 +76,7 @@ class UserServiceTest {
     @Test
     @DisplayName("Should throw BusinessException when email already exists")
     void createUser_duplicateEmail_throwsBusinessException() {
-        UserCreateRequest request = new UserCreateRequest("john_doe", "john@example.com", "John Doe", "USER");
+        UserCreateRequest request = new UserCreateRequest("john_doe", "john@example.com", "John Doe", "USER", "S3curePass!");
 
         when(userRepository.existsByUsername("john_doe")).thenReturn(false);
         when(userRepository.existsByEmail("john@example.com")).thenReturn(true);
@@ -84,7 +89,7 @@ class UserServiceTest {
     @Test
     @DisplayName("Should update user successfully when user exists")
     void updateUser_userExists_returnsUpdatedUserResponse() {
-        UserEntity existing = new UserEntity(1L, "john_doe", "john@example.com", "John Doe", "john doe", "ACTIVE", "USER");
+        UserEntity existing = new UserEntity(1L, "john_doe", "john@example.com", "John Doe", "john doe", "ACTIVE", "USER", "$2a$10$placeholderHashNotARealBcryptHash");
         UserUpdateRequest request = new UserUpdateRequest("john.new@example.com", "John Updated", "ACTIVE", "ADMIN");
 
         when(userRepository.findById(1L)).thenReturn(existing);
@@ -107,7 +112,7 @@ class UserServiceTest {
     @Test
     @DisplayName("Should throw BusinessException when updating with duplicate email")
     void updateUser_duplicateEmail_throwsBusinessException() {
-        UserEntity existing = new UserEntity(1L, "john_doe", "john@example.com", "John Doe", "john doe", "ACTIVE", "USER");
+        UserEntity existing = new UserEntity(1L, "john_doe", "john@example.com", "John Doe", "john doe", "ACTIVE", "USER", "$2a$10$placeholderHashNotARealBcryptHash");
         UserUpdateRequest request = new UserUpdateRequest("john.other@example.com", "John Updated", "ACTIVE", "ADMIN");
 
         when(userRepository.findById(1L)).thenReturn(existing);

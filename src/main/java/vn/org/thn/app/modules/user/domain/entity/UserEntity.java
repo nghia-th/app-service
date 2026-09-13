@@ -48,4 +48,19 @@ public class UserEntity extends BaseEntity {
 
     @Column(name = "role")
     private String role;
+
+    /**
+     * BCrypt hash of the login password, never the plaintext value - written by
+     * {@code UserService#createUser} via the shared {@code PasswordEncoder} bean, and checked (not
+     * read back out) by {@code UserCredentialAuthenticator} during standalone-mode login (see
+     * {@code base.security.CredentialAuthenticator}). Nullable: rows created before this field
+     * existed have no password yet, and a deployment running
+     * {@code base.security.jwt.mode=RESOURCE_SERVER} never populates or reads it at all - that
+     * mode's separate auth service owns credentials entirely.
+     * <p>
+     * Deliberately excluded from {@link vn.org.thn.app.modules.user.api.dto.UserResponse} - never
+     * serialize this field (hash or otherwise) back to a client.
+     */
+    @Column(name = "password")
+    private String password;
 }
