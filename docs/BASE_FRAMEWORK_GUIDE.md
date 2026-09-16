@@ -789,7 +789,7 @@ Khi ứng dụng khởi chạy (mặc định port `8080`):
 > 4. **Tạo Service**: `vn.org.thn.app.modules.order.application.OrderService` xử lý logic nghiệp vụ và phân trang với `@Transactional`.
 > 5. **Tạo Controller**: `vn.org.thn.app.modules.order.api.OrderCtl` kế thừa `BaseCtl`, gắn `@RestController`, `@RequestMapping("/public/order")`, kèm chú thích Swagger `@Tag` và `@Operation`.
 > 6. **Tạo Migration SQL**: Thêm file `database/<db_type>/V<N>__init_order.sql`.
-> 7. **Khai Báo Phân Quyền Endpoint** (bắt buộc, xem mục 10.4): thêm rule tương ứng cho `/public/order/**` vào `SecurityAutoConfiguration#securityFilterChain` (`base.security`). Mặc định mọi endpoint chưa khai báo đều yêu cầu token hợp lệ (`anyRequest().authenticated()`) - nếu quên bước này, endpoint mới **vẫn chạy được nhưng sẽ luôn đòi token**, kể cả khi ý định là để public; ngược lại nếu định giới hạn theo role mà quên khai báo, endpoint sẽ chỉ cần đăng nhập (bất kỳ role nào) thay vì đúng role mong muốn.
+> 7. **Khai Báo Phân Quyền Endpoint** (bắt buộc, xem mục 10.4): tạo `vn.org.thn.app.modules.order.api.OrderSecurityRules implements SecurityRuleCustomizer` (annotate `@Component`), khai báo rule cho `/public/order/**` trong đó - **không** sửa `SecurityAutoConfiguration` trong `base`. Mặc định mọi endpoint chưa khai báo đều yêu cầu token hợp lệ (`anyRequest().authenticated()`) - nếu quên bước này, endpoint mới **vẫn chạy được nhưng sẽ luôn đòi token**, kể cả khi ý định là để public; ngược lại nếu định giới hạn theo role mà quên khai báo, endpoint sẽ chỉ cần đăng nhập (bất kỳ role nào) thay vì đúng role mong muốn.
 > 8. **Tạo Unit Test**: Thêm `src/test/java/vn/org/thn/app/modules/order/OrderServiceTest.java`.
 ---
 
@@ -833,22 +833,38 @@ Cả 2 chế độ đọc/ghi cùng 1 bộ claim, để chuyển đổi chế đ
 
 `POST /public/auth/login` (public, không cần token) - nhận `{ "username", "password" }`, trả `{ "accessToken", "tokenType": "Bearer", "expiresIn" }`.
 
-Việc xác thực username/password không nằm trong `base` (vì `base` không biết gì về `UserEntity`/CSDL của service) - `base` chỉ định nghĩa interface `CredentialAuthenticator`, mỗi service tự cung cấp implementation (`@Component`) bridge sang dữ liệu thật của mình. Ví dụ tham chiếu: `vn.org.thn.app.modules.user.application.UserCredentialAuthenticator`, dùng `UserRepository` + `PasswordEncoder` (bean có sẵn từ `SecurityAutoConfiguration`, BCrypt mặc định).
+Việc xác thực username/password không nằm trong `base` (vì `base` không biết gì về `UserEntity`/CSDL của service) - `base` chỉ định nghĩa interface `CredentialAuthenticator`, mỗi service tự cung cấp implementation (`@Component`) bridge sang dữ liệu thật của mình, đặt tại `modules/<module>/infrastructure/security/` (adapter hiện thực port do `base` định nghĩa, cùng tầng với Repository implementation). Ví dụ tham chiếu: `vn.org.thn.app.modules.user.infrastructure.security.UserCredentialAuthenticator`, dùng `UserRepository` + `PasswordEncoder` (bean có sẵn từ `SecurityAutoConfiguration`, BCrypt mặc định).
 
 `CredentialAuthenticator.authenticate(username, password)` **luôn trả `null`** cho mọi lý do thất bại (không tìm thấy username / sai mật khẩu / tài khoản inactive / chưa có mật khẩu) - tránh lộ thông tin qua thông báo lỗi khác nhau (username enumeration).
 
 ### 10.4 Bảo Vệ Endpoint Mới - Bắt Buộc Khi Thêm Module
 
-`SecurityAutoConfiguration#securityFilterChain` khai báo rule theo từng path/method. **Mặc định `anyRequest().authenticated()`** áp dụng cho mọi endpoint chưa được khai báo tường minh - nghĩa là một endpoint mới tạo ra, nếu không thêm rule, sẽ tự động yêu cầu **có** token hợp lệ (nhưng không giới hạn role cụ thể nào). Khi tạo module mới theo Recipe ở mục 9, luôn thêm rule tương ứng:
+`SecurityAutoConfiguration#securityFilterChain` (trong `base`) khai báo rule cho các thành phần thuộc chính `base` (Swagger docs, `/public/auth/login`, `LanguageApi`), sau đó tự động gom và áp dụng rule từ **mọi bean `SecurityRuleCustomizer`** đang có trong context, và cuối cùng mới tới `anyRequest().authenticated()`. **Mặc định `anyRequest().authenticated()`** áp dụng cho mọi endpoint chưa được khai báo tường minh ở đâu đó (kể cả qua `SecurityRuleCustomizer`) - nghĩa là một endpoint mới tạo ra, nếu không thêm rule, sẽ tự động yêu cầu **có** token hợp lệ (nhưng không giới hạn role cụ thể nào).
+
+**Từ 2026-09-16, mỗi module nghiệp vụ tự khai báo rule của mình** bằng một bean `@Component implements SecurityRuleCustomizer` đặt ngay trong package `api` của module - **không sửa `SecurityAutoConfiguration` trong `base`** (vi phạm Điều 2 của `AGENT.md`). Ví dụ cho module `Order`:
 
 ```java
-.requestMatchers(HttpMethod.GET, "/public/order/**").hasAnyRole("USER", "ADMIN")
-.requestMatchers(HttpMethod.POST, "/public/order").hasRole("ADMIN")
-.requestMatchers(HttpMethod.PUT, "/public/order/**").hasRole("ADMIN")
-.requestMatchers(HttpMethod.DELETE, "/public/order/**").hasRole("ADMIN")
+package vn.org.thn.app.modules.order.api;
+
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AuthorizeHttpRequestsConfigurer;
+import org.springframework.stereotype.Component;
+import vn.org.thn.app.base.security.SecurityRuleCustomizer;
+
+@Component
+public class OrderSecurityRules implements SecurityRuleCustomizer {
+    @Override
+    public void customize(AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry registry) {
+        registry.requestMatchers(HttpMethod.GET, "/public/order/**").hasAnyRole("USER", "ADMIN")
+                .requestMatchers(HttpMethod.POST, "/public/order").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/public/order/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/public/order/**").hasRole("ADMIN");
+    }
+}
 ```
 
-Nếu endpoint thực sự cần public (không cần đăng nhập), khai báo `.permitAll()` tường minh thay vì để lọt vào `anyRequest()`.
+Xem `vn.org.thn.app.modules.user.api.UserSecurityRules` làm ví dụ mẫu đã có sẵn trong dự án. Nếu endpoint thực sự cần public (không cần đăng nhập), khai báo `.permitAll()` tường minh trong customizer của module đó thay vì để lọt vào `anyRequest()`.
 
 `@EnableMethodSecurity` đã được bật sẵn ở `SecurityAutoConfiguration`, nên cũng có thể dùng `@PreAuthorize("hasRole('ADMIN')")` trực tiếp trên method của Controller/Service - dùng khi rule phụ thuộc vào logic phức tạp hơn path/method HTTP đơn thuần (ví dụ chỉ chủ sở hữu resource mới được sửa).
 

@@ -197,4 +197,81 @@ class QueryBuilderTest {
         assertTrue(sql.contains("ESCAPE '!'"));
         assertTrue(builder.getParams().containsValue("%100!%!_done%"));
     }
+
+    // --- Medium finding (2026-09-16 review): mixing eq/orEq at the top level, without and()/or()
+    // grouping, must not silently fall back to default SQL AND-before-OR precedence - it must
+    // evaluate strictly left-to-right, matching what the fluent call order visually implies. ---
+
+    @Test
+    @DisplayName("Mixing top-level eq/orEq without and()/or() grouping evaluates left-to-right, not by default SQL AND-before-OR precedence")
+    void buildSql_mixedTopLevelAndOr_evaluatesLeftToRight() {
+        QueryBuilder<Translate> builder = new QueryBuilder<>(Translate.class, translateEntityInfo, queryExecutor);
+        builder.eq(Translate::getLang, "vi")
+               .orEq(Translate::getLang, "en")
+               .eq(Translate::getLangKey, "welcome");
+
+        String sql = builder.toSql();
+
+        // Must render as (lang = ? OR lang = ?) AND lang_key = ?, i.e. left-to-right, NOT
+        // lang = ? OR (lang = ? AND lang_key = ?) (what plain unparenthesized concatenation +
+        // default SQL precedence would otherwise produce).
+        assertTrue(sql.contains("WHERE (lang = #{"), "the OR-joined pair must be parenthesized before the AND is appended: " + sql);
+        assertTrue(sql.contains(") AND lang_key = #{"), "the AND must apply to the whole parenthesized OR group, not just the last OR operand: " + sql);
+    }
+
+    @Test
+    @DisplayName("A pure-AND or pure-OR top-level chain renders with no extra parentheses (unambiguous either way)")
+    void buildSql_homogeneousTopLevelChain_noExtraParens() {
+        QueryBuilder<Translate> builder = new QueryBuilder<>(Translate.class, translateEntityInfo, queryExecutor);
+        builder.eq(Translate::getLang, "vi")
+               .eq(Translate::getLangKey, "welcome");
+
+        String sql = builder.toSql();
+
+        assertTrue(sql.contains("WHERE lang = #{"), "a pure-AND chain needs no disambiguating parens: " + sql);
+        assertFalse(sql.contains("("), "no parenthesis should be introduced for an unambiguous pure-AND chain: " + sql);
+    }
+
+    // --- Medium finding (2026-09-16 review): the String-based overloads (eq(String,...),
+    // orderByAsc(String), select(String...), ...) must reject a field name the entity doesn't
+    // recognize, instead of silently splicing it into column-name position - otherwise a caller
+    // that ever forwards client-supplied input into one of these (e.g. a "?sortBy=" query param
+    // into orderByDesc(String)) would have a SQL-injection-via-column-name hole with nothing here
+    // to catch it. ---
+
+    @Test
+    @DisplayName("eq(String,...) throws for a field name the entity doesn't declare, instead of splicing it in as a raw column name")
+    void eq_unknownStringField_throws() {
+        QueryBuilder<Translate> builder = new QueryBuilder<>(Translate.class, translateEntityInfo, queryExecutor);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> builder.eq("'; DROP TABLE translate; --", "x"));
+        assertTrue(ex.getMessage().contains("Unknown field"));
+    }
+
+    @Test
+    @DisplayName("orderByDesc(String) throws for an unknown field name")
+    void orderByDesc_unknownStringField_throws() {
+        QueryBuilder<Translate> builder = new QueryBuilder<>(Translate.class, translateEntityInfo, queryExecutor);
+
+        assertThrows(IllegalArgumentException.class, () -> builder.orderByDesc("id, (SELECT 1)"));
+    }
+
+    @Test
+    @DisplayName("eq(String,...) still accepts a declared entity field name")
+    void eq_knownFieldName_resolvesToItsColumn() {
+        QueryBuilder<Translate> builder = new QueryBuilder<>(Translate.class, translateEntityInfo, queryExecutor);
+        builder.eq("langKey", "welcome");
+
+        assertTrue(builder.toSql().contains("WHERE lang_key = #{"));
+    }
+
+    @Test
+    @DisplayName("eq(String,...) also accepts one of the entity's own column names verbatim (not just the camelCase field name) - BaseRepositoryImpl's findById/deleteById/withCompositeId rely on this")
+    void eq_knownColumnNameVerbatim_isAccepted() {
+        QueryBuilder<Translate> builder = new QueryBuilder<>(Translate.class, translateEntityInfo, queryExecutor);
+        builder.eq("lang_key", "welcome");
+
+        assertTrue(builder.toSql().contains("WHERE lang_key = #{"));
+    }
 }

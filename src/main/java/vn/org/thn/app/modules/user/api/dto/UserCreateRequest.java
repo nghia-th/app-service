@@ -3,6 +3,7 @@ package vn.org.thn.app.modules.user.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -27,6 +28,7 @@ public class UserCreateRequest {
     @Schema(description = "Họ và tên", example = "John Doe")
     private String fullName;
 
+    @Pattern(regexp = "ADMIN|USER", message = "Role must be either ADMIN or USER")
     @Schema(description = "Vai trò (ADMIN / USER)", example = "USER")
     private String role;
 

@@ -79,7 +79,8 @@ Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **b�
 
 ### ⚡ Điều 9: Phân Quyền Endpoint Bắt Buộc (Security/JWT)
 - Từ 2026-09-13, `base` mang theo sẵn hệ thống JWT Auth/Authorization 2 chế độ (`base.security.*`, xem `BASE_FRAMEWORK_GUIDE.md` mục 10) - **mặc định mọi endpoint chưa khai báo rule đều yêu cầu token hợp lệ** (`anyRequest().authenticated()` trong `SecurityAutoConfiguration#securityFilterChain`).
-- Khi tạo endpoint/module mới, **bắt buộc** thêm rule tường minh vào `securityFilterChain`: `.permitAll()` nếu endpoint cố ý công khai, `.hasRole(...)`/`.hasAnyRole(...)` nếu giới hạn theo vai trò. Không dựa vào hành vi mặc định để suy ra ý định phân quyền.
+- Khi tạo endpoint/module mới, **bắt buộc** thêm rule tường minh: `.permitAll()` nếu endpoint cố ý công khai, `.hasRole(...)`/`.hasAnyRole(...)` nếu giới hạn theo vai trò. Không dựa vào hành vi mặc định để suy ra ý định phân quyền.
+- **TUYỆT ĐỐI KHÔNG** sửa trực tiếp `SecurityAutoConfiguration#securityFilterChain` trong `base` để thêm rule cho module nghiệp vụ (vi phạm Điều 2, và từ 2026-09-16 không còn cần thiết nữa). Thay vào đó, tạo một `@Component implements SecurityRuleCustomizer` (interface trong `vn.org.thn.app.base.security`) ngay trong package `api` của module đó - xem `vn.org.thn.app.modules.user.api.UserSecurityRules` làm ví dụ mẫu. `securityFilterChain` tự động gom và áp dụng mọi bean `SecurityRuleCustomizer` trước dòng `anyRequest().authenticated()` cuối cùng.
 - **TUYỆT ĐỐI KHÔNG** đọc thông tin user hiện tại (cho audit log hay bất kỳ mục đích gì) từ header client tự gửi (`X-User-Id`, `X-Username`...) - đây chính là lỗ hổng Critical #2 đã bị vá; luôn dùng `SecurityContextHolder.getContext().getAuthentication()` hoặc helper `RequestContextFilter.resolveUser(request)` đã có sẵn trong `base`.
 
 ---
@@ -100,7 +101,8 @@ Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **b�
 | Tự gán tay các trường audit (`setCreatedAt`, `setUpdatedAt`...) trong Service | Để `save()` và `saveAll()` của framework tự động điền qua cơ chế Auto-Audit của `BaseEntity`. | Tránh mã nguồn thừa thãi (boilerplate), đảm bảo tính nhất quán và bảo vệ dữ liệu audit gốc không bị ghi đè. |
 | Viết trực tiếp câu lệnh SQL dạng String trong Controller hoặc Service | Sử dụng `QueryBuilder` hoặc viết Custom MyBatis XML Mapper. | Đảm bảo tính đóng gói, dễ bảo trì và ngăn ngừa SQL Injection. |
 | Sửa đổi file `mapper/DynamicSQL.xml` | Tạo file mapper mới `mapper/<Module>CustomMapper.xml`. | `DynamicSQL.xml` là core engine của ORM framework. |
-| Tạo endpoint mới mà không thêm rule vào `securityFilterChain` | Luôn khai báo `.permitAll()` hoặc `.hasRole(...)`/`.hasAnyRole(...)` tường minh cho path mới trong `base.security.SecurityAutoConfiguration`. | Mặc định `anyRequest().authenticated()` sẽ áp dụng - endpoint vẫn chạy nhưng có thể yêu cầu/không yêu cầu đúng quyền như ý định ban đầu. |
+| Tạo endpoint mới mà không khai báo rule phân quyền | Tạo bean `@Component implements SecurityRuleCustomizer` trong package `api` của module, khai báo `.permitAll()` hoặc `.hasRole(...)`/`.hasAnyRole(...)` tường minh cho path mới - xem `UserSecurityRules` làm ví dụ. | Mặc định `anyRequest().authenticated()` sẽ áp dụng - endpoint vẫn chạy nhưng có thể yêu cầu/không yêu cầu đúng quyền như ý định ban đầu. |
+| Sửa trực tiếp `base.security.SecurityAutoConfiguration#securityFilterChain` để thêm rule cho module nghiệp vụ | Tạo `SecurityRuleCustomizer` riêng trong module đó (xem Điều 9). | Vi phạm Điều 2 (không sửa `base`); mỗi module mới không còn phải đụng vào core framework. |
 | Đọc thông tin user từ header client tự gửi (`X-User-Id`, `X-Username`...) cho audit log/phân quyền | Dùng `SecurityContextHolder.getContext().getAuthentication()` hoặc `RequestContextFilter.resolveUser(request)`. | Header client tự gửi không qua xác thực, dễ bị giả mạo (đây chính là Critical #2 đã bị vá 2026-09-13). |
 
 ---

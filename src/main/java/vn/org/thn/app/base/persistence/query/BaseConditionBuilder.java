@@ -63,11 +63,44 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
         return LambdaFieldResolver.resolve(property);
     }
 
-    /** Field name -> column name via the entity's reverse index; falls back to the field name itself
-     *  (e.g. a raw/aliased expression that isn't a mapped entity field). */
+    /**
+     * Resolves {@code field} to a SQL column name the caller may safely splice into the statement
+     * text this class builds - either {@code field} is a declared entity field name (the normal
+     * case: every method-reference overload above resolves to one via {@link #fieldName}, and so
+     * does a caller of the String overload following the documented contract), which maps to its
+     * column via the entity's reverse index; or {@code field} is already one of the entity's own
+     * column names verbatim (accepted as-is - {@code BaseRepositoryImpl#findById}/{@code
+     * existsById}/{@code deleteById}/{@code withCompositeId} call the String overloads with a
+     * column name straight from {@code EntityInfo#getIds()}, not a field name, so both forms must
+     * resolve).
+     * <p>
+     * Anything else throws instead of silently passing the raw string through as a column name, as
+     * it did before (see Medium finding, 2026-09-16 review): the String overloads
+     * ({@code eq(String,...)}, {@code orderByAsc(String)}, {@code select(String...)}, ...) are
+     * public API, and an unrecognized {@code field} reaching here is exactly the shape a client-
+     * supplied value (e.g. a {@code ?sortBy=} query parameter forwarded straight into
+     * {@code orderByDesc(sortBy)}) would take - silently accepting it would let that value land,
+     * unescaped, in column-name position of the executed SQL text (this ORM parameterizes
+     * <em>values</em> via {@code #{name}} bind params, but a column name is never a bind
+     * parameter). Nothing in this codebase currently does that, but the guard costs nothing for the
+     * two legitimate cases above and closes the door on it by construction rather than by
+     * convention. A genuinely raw/aliased SQL expression should go through {@link
+     * QueryBuilder#selectRaw} or {@link #raw(String)} instead, which are named and documented as
+     * raw on purpose.
+     */
     protected String column(String field) {
         String col = info.getFieldColumns().get(field);
-        return col != null ? col : field;
+        if (col != null) {
+            return col;
+        }
+        if (info.getColumns().containsKey(field)) {
+            return field;
+        }
+        throw new IllegalArgumentException(
+                "Unknown field '" + field + "' on " + clazz.getSimpleName()
+                        + " - the String-based query DSL overloads only accept a declared entity field "
+                        + "name or one of its own column names, never an arbitrary/unvalidated string; "
+                        + "prefer the Entity::getField method-reference overload instead");
     }
 
     /** Mints the next bind-parameter placeholder name ({@code p1}, {@code p2}, ...), wrapping back to 0 past one million to keep names short over a long-lived builder. */
@@ -96,15 +129,39 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
                 .replace("_", escapeChar + "_");
     }
 
-    /** Renders all accumulated WHERE fragments, joined by each fragment's own {@link QueryLogic} (AND/OR). */
+    /**
+     * Renders all accumulated WHERE fragments, joined left-to-right by each fragment's own
+     * {@link QueryLogic} (AND/OR).
+     * <p>
+     * Plain SQL lets {@code AND} bind tighter than {@code OR}, so naively concatenating fragments
+     * in call order can silently render something other than what the fluent chain visually
+     * suggests - e.g. {@code eq(a).orEq(b).eq(c)} would join into {@code a = ? OR b = ? AND c = ?},
+     * which SQL parses as {@code a = ? OR (b = ? AND c = ?)}, not the left-to-right
+     * {@code (a = ? OR b = ?) AND c = ?} the call order implies (see Medium finding, 2026-09-16
+     * review). A pure-AND or pure-OR chain is inherently unambiguous either way, so this only
+     * inserts a disambiguating parenthesis around everything accumulated so far at the one point
+     * default precedence would otherwise bite: right before an {@code AND} condition is appended
+     * onto a top-level {@code OR} that isn't already parenthesized. Once wrapped, that group reads
+     * as a single unit and needs no further wrapping. A caller who wants a specific grouping other
+     * than strict left-to-right should still reach for {@link QueryBuilder#and}/
+     * {@link QueryBuilder#or} to build an explicit nested group, exactly as before.
+     */
     protected String buildWhere() {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < whereClauses.size(); i++) {
+        if (whereClauses.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(whereClauses.get(0).sql());
+        boolean topLevelOrExposed = false;
+        for (int i = 1; i < whereClauses.size(); i++) {
             QueryCondition cond = whereClauses.get(i);
-            if (i > 0) {
-                sb.append(' ').append(cond.logic().name()).append(' ');
+            if (cond.logic() == QueryLogic.AND && topLevelOrExposed) {
+                sb.insert(0, '(').append(')');
+                topLevelOrExposed = false;
             }
-            sb.append(cond.sql());
+            sb.append(' ').append(cond.logic().name()).append(' ').append(cond.sql());
+            if (cond.logic() == QueryLogic.OR) {
+                topLevelOrExposed = true;
+            }
         }
         return sb.toString();
     }

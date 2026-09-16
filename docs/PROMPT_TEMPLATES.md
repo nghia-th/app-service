@@ -165,14 +165,14 @@ Hãy viết bài Unit Test đầy đủ cho UserService tại src/test/java/vn/o
 Module Order vừa tạo xong, hãy bổ sung phân quyền endpoint theo BASE_FRAMEWORK_GUIDE.md mục 10:
 - GET /public/order/** : cho phép role USER và ADMIN.
 - POST/PUT/DELETE /public/order/** : chỉ cho phép role ADMIN.
-- Cập nhật rule tương ứng trong SecurityAutoConfiguration#securityFilterChain (base.security).
+- Tạo bean OrderSecurityRules implements SecurityRuleCustomizer trong modules/order/api/ (xem UserSecurityRules làm ví dụ mẫu) - KHÔNG sửa base.security.SecurityAutoConfiguration.
 - Viết/cập nhật Unit Test xác minh: gọi không token bị 401, gọi token role USER vào endpoint ghi bị 403, gọi token role ADMIN thành công.
 ```
 
 ### Mẫu 7.2: Thêm Đăng Nhập Cho Module Nghiệp Vụ Mới (chỉ áp dụng chế độ STANDALONE)
 ```text
 Module Partner cần tự xác thực partner qua username/password riêng (khác bảng tbl_user):
-- Tạo PartnerCredentialAuthenticator implements base.security.CredentialAuthenticator trong modules/partner/application/, dùng PartnerRepository + PasswordEncoder (bean có sẵn từ SecurityAutoConfiguration).
+- Tạo PartnerCredentialAuthenticator implements base.security.CredentialAuthenticator trong modules/partner/infrastructure/security/, dùng PartnerRepository + PasswordEncoder (bean có sẵn từ SecurityAutoConfiguration).
 - authenticate() phải trả về null đồng nhất cho mọi lý do thất bại (không tìm thấy / sai mật khẩu / inactive) - không được để lộ qua thông báo lỗi khác nhau (tránh username enumeration).
 - Không tự viết endpoint /login riêng - base.security.api.AuthCtl (POST /public/auth/login) đã dùng CredentialAuthenticator bean có sẵn trong context, chỉ cần đăng ký bean Partner implementation là dùng được (miễn app chỉ có 1 CredentialAuthenticator bean tại một thời điểm).
 - Viết Unit Test tương tự UserCredentialAuthenticatorTest.
@@ -180,7 +180,7 @@ Module Partner cần tự xác thực partner qua username/password riêng (khá
 
 ### Mẫu 7.3: Kiểm Tra Lại Toàn Bộ Endpoint Sau Khi Bật Auth
 ```text
-Sau khi bật JWT Auth toàn hệ thống, hãy rà soát lại toàn bộ endpoint hiện có trong SecurityAutoConfiguration#securityFilterChain:
+Sau khi bật JWT Auth toàn hệ thống, hãy rà soát lại toàn bộ rule phân quyền hiện có - cả rule của base trong SecurityAutoConfiguration#securityFilterChain lẫn rule riêng của từng module (mọi bean implements SecurityRuleCustomizer, ví dụ UserSecurityRules):
 - Liệt kê endpoint nào đang permitAll(), endpoint nào yêu cầu role gì.
 - Đối chiếu với ý định nghiệp vụ thực tế (endpoint đọc công khai hay cần đăng nhập, endpoint ghi cần role gì).
 - Báo cáo lại nếu phát hiện endpoint nào đang rơi vào default anyRequest().authenticated() mà lẽ ra cần permitAll() hoặc cần giới hạn role cụ thể hơn.

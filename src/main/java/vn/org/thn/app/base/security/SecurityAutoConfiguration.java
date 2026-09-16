@@ -29,6 +29,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
+import java.util.List;
+
 /**
  * Auto-registers JWT authentication/authorization for any service depending on {@code base} -
  * listed in {@code META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports},
@@ -152,10 +154,12 @@ public class SecurityAutoConfiguration {
      * vn.org.thn.app.base.security.api.AuthCtl}).</li>
      * <li>{@code LanguageApi}: only the three read endpoints ({@code GET .../list}, {@code GET
      * .../{lang}}, bare {@code GET} for all languages) are public; every write is
-     * {@code ADMIN}-only.</li>
-     * <li>{@code UserCtl}: reads ({@code page}/{@code getById}) need {@code USER} or {@code ADMIN};
-     * writes (create/update/delete) are {@code ADMIN}-only - this module is a demo of the pattern,
-     * not a fixed rule about who may manage users.</li>
+     * {@code ADMIN}-only. Declared here (not via {@link SecurityRuleCustomizer}) because
+     * {@code LanguageApi} itself is part of {@code base}, same as this class.</li>
+     * <li>Every registered {@link SecurityRuleCustomizer} bean, in whatever order Spring supplies
+     * them - this is where a consuming service's own business modules (e.g. {@code app-service}'s
+     * {@code UserCtl}) declare their rules, without editing this class (see that interface's
+     * javadoc for why this replaced hard-coding {@code /public/user/**} directly here).</li>
      * <li>Everything else requires a valid, signed token (no anonymous access by default for any
      * future endpoint that forgets to declare its own rule).</li>
      * </ul>
@@ -171,23 +175,22 @@ public class SecurityAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(SecurityFilterChain.class)
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder jwtDecoder,
-            JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
+            JwtAuthenticationConverter jwtAuthenticationConverter,
+            List<SecurityRuleCustomizer> securityRuleCustomizers) throws Exception {
         http.csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api.html", "/api.html/**", "/doc", "/doc/**",
-                                "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/webjars/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/public/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/public/language", "/public/language/list", "/public/language/*").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/public/language").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/public/language").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/public/language", "/public/language/deletes").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/public/language/export").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/public/user/**").hasAnyRole("USER", "ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/public/user").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/public/user/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/public/user/**").hasRole("ADMIN")
-                        .anyRequest().authenticated())
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers("/api.html", "/api.html/**", "/doc", "/doc/**",
+                                    "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/webjars/**").permitAll()
+                            .requestMatchers(HttpMethod.POST, "/public/auth/login").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/public/language", "/public/language/list", "/public/language/*").permitAll()
+                            .requestMatchers(HttpMethod.POST, "/public/language").hasRole("ADMIN")
+                            .requestMatchers(HttpMethod.PUT, "/public/language").hasRole("ADMIN")
+                            .requestMatchers(HttpMethod.DELETE, "/public/language", "/public/language/deletes").hasRole("ADMIN")
+                            .requestMatchers(HttpMethod.POST, "/public/language/export").hasRole("ADMIN");
+                    securityRuleCustomizers.forEach(customizer -> customizer.customize(auth));
+                    auth.anyRequest().authenticated();
+                })
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt
                         .decoder(jwtDecoder)
                         .jwtAuthenticationConverter(jwtAuthenticationConverter)));

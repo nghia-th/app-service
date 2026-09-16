@@ -138,7 +138,20 @@ public class RequestContextFilter implements Filter {
         return contentLength >= 0 && contentLength <= MAX_LOGGED_BODY_BYTES;
     }
 
-    /** Resolves the caller's IP through the usual reverse-proxy header chain, falling back to the socket address. */
+    /**
+     * Resolves the caller's IP through the usual reverse-proxy header chain, falling back to the
+     * socket address.
+     * <p>
+     * <b>Not a trust boundary:</b> every header in {@link #CLIENT_IP_HEADERS} (including
+     * {@code X-Forwarded-For}) is taken from the request as-is, with no check that it was actually
+     * set by a trusted reverse proxy in front of this service rather than forged by the calling
+     * client itself - anyone can send {@code X-Forwarded-For: 1.2.3.4} directly and this method
+     * will return exactly that. Fine for logging/audit/display (the current only use, via
+     * {@code BaseCtl#getClientIp}), where a misleading value is a minor annoyance at worst; do
+     * <b>not</b> build a security decision on it (IP allowlisting, rate-limiting, "block this IP"),
+     * unless this service is deployed behind a proxy known to strip/overwrite these headers before
+     * they reach it - a bare guard here can't know that.
+     */
     public static String resolveClientIp(HttpServletRequest request) {
         for (String header : CLIENT_IP_HEADERS) {
             String value = request.getHeader(header);

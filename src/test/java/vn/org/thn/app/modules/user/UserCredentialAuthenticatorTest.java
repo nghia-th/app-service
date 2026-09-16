@@ -8,7 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import vn.org.thn.app.base.security.AuthenticatedPrincipal;
-import vn.org.thn.app.modules.user.application.UserCredentialAuthenticator;
+import vn.org.thn.app.modules.user.infrastructure.security.UserCredentialAuthenticator;
 import vn.org.thn.app.modules.user.domain.entity.UserEntity;
 import vn.org.thn.app.modules.user.infrastructure.UserRepository;
 

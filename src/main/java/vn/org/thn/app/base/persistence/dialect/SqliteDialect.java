@@ -15,12 +15,16 @@ public class SqliteDialect implements SqlDialect {
         return sql + limitPart + offsetPart;
     }
 
-    /** SQLite's {@code last_insert_rowid()} reads back the identity value from the INSERT run just before it on the same connection. */
+    /**
+     * Plain INSERT with no identity lookup of its own - {@link #singleStatementReturning()} is
+     * {@code false} below, so {@code InsertExecutor} always follows this up with a separate
+     * {@link #buildIdentitySelect} query (SQLite's {@code last_insert_rowid()}, which reads back
+     * the identity value from the INSERT run just before it on the same connection) rather than
+     * expecting this method to return it in one round trip.
+     */
     @Override
     public String buildInsertReturning(String table, String columns, String params, String identityColumn) {
-        return "INSERT INTO " + table + " (" + columns + ")\n"
-                + "VALUES (" + params + ");\n\n";
-//                + "SELECT last_insert_rowid();";
+        return "INSERT INTO " + table + " (" + columns + ") VALUES (" + params + ")";
     }
 
     @Override

@@ -1,4 +1,4 @@
-package vn.org.thn.app.modules.user.application;
+package vn.org.thn.app.modules.user.infrastructure.security;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,6 +16,13 @@ import java.util.List;
  * Registered as a plain {@code @Component} so it's the one bean satisfying {@link
  * CredentialAuthenticator} that {@code base.security}'s standalone-mode login endpoint depends on -
  * see that interface's javadoc for why {@code base} can't provide this itself.
+ * <p>
+ * Lives under {@code infrastructure/security/} (moved here 2026-09-16, was {@code application/} -
+ * see the note this resolved in {@code docs/MICROSERVICE_ARCHITECTURE_GUIDE.md} 2.2): this class is
+ * an adapter implementing a port owned by an outer layer ({@code base.security.CredentialAuthenticator})
+ * by wiring it to this module's own persistence ({@link UserRepository}) - the same shape as a
+ * repository implementation, not an application-layer use case (it orchestrates no other service,
+ * manages no transaction, converts no DTO).
  * <p>
  * {@link UserEntity#getRole()} stores a bare role name (e.g. {@code "USER"}, {@code "ADMIN"}, see
  * {@code UserService#createUser}'s default) - this class is the one place that turns it into the
