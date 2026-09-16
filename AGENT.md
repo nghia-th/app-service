@@ -29,7 +29,7 @@ Trước khi thực hiện yêu cầu của người dùng, hãy mở và đọc
 
 ## 🚨 2. Các Điều Luật Vàng Cho AI Agent (Golden Execution Rules)
 
-Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **bắt buộc tuân thủ 100%** 9 điều luật sau mà không có ngoại lệ:
+Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **bắt buộc tuân thủ 100%** 11 điều luật sau mà không có ngoại lệ:
 
 ### ⚡ Điều 1: Định Vị Package Chuẩn Microservice
 - Mọi class nghiệp vụ mới **phải nằm trong `vn.org.thn.app.modules.<module_name>.*`** (Ví dụ: `vn.org.thn.app.modules.user`, `vn.org.thn.app.modules.order`).
@@ -83,6 +83,21 @@ Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **b�
 - **TUYỆT ĐỐI KHÔNG** sửa trực tiếp `SecurityAutoConfiguration#securityFilterChain` trong `base` để thêm rule cho module nghiệp vụ (vi phạm Điều 2, và từ 2026-09-16 không còn cần thiết nữa). Thay vào đó, tạo một `@Component implements SecurityRuleCustomizer` (interface trong `vn.org.thn.app.base.security`) ngay trong package `api` của module đó - xem `vn.org.thn.app.modules.user.api.UserSecurityRules` làm ví dụ mẫu. `securityFilterChain` tự động gom và áp dụng mọi bean `SecurityRuleCustomizer` trước dòng `anyRequest().authenticated()` cuối cùng.
 - **TUYỆT ĐỐI KHÔNG** đọc thông tin user hiện tại (cho audit log hay bất kỳ mục đích gì) từ header client tự gửi (`X-User-Id`, `X-Username`...) - đây chính là lỗ hổng Critical #2 đã bị vá; luôn dùng `SecurityContextHolder.getContext().getAuthentication()` hoặc helper `RequestContextFilter.resolveUser(request)` đã có sẵn trong `base`.
 
+### ⚡ Điều 10: Đồng Bộ Tài Liệu Sau Khi Thay Đổi Quy Ước/Kiến Trúc
+- Khi thay đổi bất kỳ quy ước, pattern, hay quyết định kiến trúc nào đã được ghi trong `AGENT.md` hoặc `docs/*.md` (ví dụ: đổi cách khai báo phân quyền endpoint, đổi vị trí đặt một loại class, đổi tên interface/class core...), AI Agent **bắt buộc** phải `grep` từ khóa liên quan trên toàn bộ `AGENT.md` + `docs/*.md` để tìm mọi chỗ còn mô tả cách làm cũ, và cập nhật hết trong cùng lượt - không chỉ sửa file "nghĩ tới đầu tiên".
+- Việc rà soát này phải làm **ngay sau khi sửa code xong**, không phải "nếu nhớ" hay chờ người dùng nhắc lại.
+- Nếu phát hiện tài liệu mô tả một quy ước đã lỗi thời nhưng **không liên quan trực tiếp** tới thay đổi đang làm, phải báo lại cho người dùng biết thay vì tự ý sửa lan man ngoài phạm vi yêu cầu - trừ khi được cho phép mở rộng.
+- **Ví dụ thực tế (2026-09-16)**: khi tách rule bảo mật `/public/user/**` ra khỏi `SecurityAutoConfiguration` (xem Điều 9), lượt sửa đầu chỉ cập nhật `AGENT.md` và `BASE_FRAMEWORK_GUIDE.md`, bỏ sót `MICROSERVICE_ARCHITECTURE_GUIDE.md` và `PROMPT_TEMPLATES.md` - khiến 2 tài liệu này tiếp tục dạy sai cách làm cho tới khi rà soát lại riêng.
+
+### ⚡ Điều 11: Bắt Buộc Tạo Tài Liệu Riêng Cho Mỗi Module/Tính Năng Mới
+- Khi tạo mới một module nghiệp vụ (hoặc một tính năng lớn trong module có sẵn), AI Agent **bắt buộc** tạo file `docs/<TÊN_MODULE>_API_GUIDE.md`, theo đúng mẫu cấu trúc của `docs/LANGUAGE_API_GUIDE.md`:
+  1. Tổng quan: Base URL, định dạng response, yêu cầu xác thực.
+  2. Bảng danh sách toàn bộ endpoint (method, path, mô tả, yêu cầu role).
+  3. Chi tiết từng endpoint: request/response example thật (JSON cụ thể, không phải placeholder mơ hồ).
+  4. Bảng mã lỗi thường gặp của module đó.
+- File này viết **sau khi code đã chạy được và test đã pass** - request/response example phải khớp đúng DTO/`ApiResponse` thực tế, không suy đoán.
+- Đây là tài liệu bổ sung, không thay thế Swagger (`@Tag`/`@Operation` ở Điều 4 vẫn bắt buộc) - Swagger phục vụ tra cứu nhanh lúc dev, còn file này phục vụ người đọc muốn hiểu module mà không cần mở code hay chạy app.
+
 ---
 
 ## 🚫 3. Các Anti-Pattern Bắt Buộc Tránh (What NOT To Do)
@@ -104,6 +119,8 @@ Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **b�
 | Tạo endpoint mới mà không khai báo rule phân quyền | Tạo bean `@Component implements SecurityRuleCustomizer` trong package `api` của module, khai báo `.permitAll()` hoặc `.hasRole(...)`/`.hasAnyRole(...)` tường minh cho path mới - xem `UserSecurityRules` làm ví dụ. | Mặc định `anyRequest().authenticated()` sẽ áp dụng - endpoint vẫn chạy nhưng có thể yêu cầu/không yêu cầu đúng quyền như ý định ban đầu. |
 | Sửa trực tiếp `base.security.SecurityAutoConfiguration#securityFilterChain` để thêm rule cho module nghiệp vụ | Tạo `SecurityRuleCustomizer` riêng trong module đó (xem Điều 9). | Vi phạm Điều 2 (không sửa `base`); mỗi module mới không còn phải đụng vào core framework. |
 | Đọc thông tin user từ header client tự gửi (`X-User-Id`, `X-Username`...) cho audit log/phân quyền | Dùng `SecurityContextHolder.getContext().getAuthentication()` hoặc `RequestContextFilter.resolveUser(request)`. | Header client tự gửi không qua xác thực, dễ bị giả mạo (đây chính là Critical #2 đã bị vá 2026-09-13). |
+| Sửa 1 tài liệu rồi coi như xong, không rà các file docs khác | `grep` từ khóa liên quan trên toàn bộ `AGENT.md` + `docs/*.md` trước khi báo cáo hoàn tất (xem Điều 10). | Tài liệu tham chiếu chéo nhiều file - sót 1 chỗ là đủ để dạy sai quy ước ở lần sau. |
+| Tạo module mới xong mà không viết `docs/<Module>_API_GUIDE.md` (xem Điều 11) | Viết tài liệu API riêng cho module theo mẫu `LANGUAGE_API_GUIDE.md` ngay sau khi code chạy được. | Người đọc sau này (kể cả AI Agent khác) phải hiểu module mà không cần mở code hay chạy thử app. |
 
 ---
 
@@ -186,4 +203,4 @@ Khi nhận yêu cầu tạo mới hoặc sửa đổi một module nghiệp vụ
 
 ---
 
-> 🎯 **Ghi nhớ**: "Luôn đọc tài liệu trước - Tuân thủ 9 điều luật vàng - Tránh anti-patterns - Chạy kiểm thử thành công trước khi báo cáo kết quả."
+> 🎯 **Ghi nhớ**: "Luôn đọc tài liệu trước - Tuân thủ 11 điều luật vàng - Tránh anti-patterns - Đồng bộ tài liệu & viết doc module mới - Chạy kiểm thử thành công trước khi báo cáo kết quả."
