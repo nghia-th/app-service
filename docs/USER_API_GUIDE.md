@@ -60,7 +60,7 @@ Tài liệu chi tiết toàn bộ các Endpoint thuộc module `User` (`vn.org.t
   - `size` *(int, optional, mặc định `20`)*: số bản ghi mỗi trang.
   - `keyword` *(String, optional)*: tìm theo `username` (LIKE, khớp một phần) **HOẶC** `email` (LIKE, khớp một phần) **HOẶC** `fullName` (so khớp không phân biệt hoa/thường, không dấu, không quan trọng thứ tự từ - qua cột `full_name_unaccent`, xem `BASE_FRAMEWORK_GUIDE.md` mục 2.8).
   - `status` *(String, optional)*: lọc chính xác theo `status` (ví dụ `ACTIVE`, `INACTIVE`) - so khớp bằng (`=`), không phải LIKE.
-- **⚠️ Giới hạn đã biết**: nếu truyền `page=0` hoặc `size` âm/`0`, API hiện trả về `500 Internal Server Error` (`COMMON_999`) thay vì `400 Bad Request` thân thiện - do `QueryBuilder.page()` ném `IllegalArgumentException` và `GlobalExceptionHandler` chưa có handler riêng cho exception này (rơi vào catch-all `Exception.class`). Client nên tự đảm bảo `page >= 1` và `size >= 1` trước khi gọi.
+- `page <= 0` hoặc `size <= 0` trả về `400 Bad Request` (`COMMON_002`) với message rõ ràng (`"page must be >= 1"` / `"size must be >= 1"`) - được `UserService#getUsersPaged` chặn trước khi chạm tới `QueryBuilder`.
 
 #### Request Example:
 ```http
@@ -96,6 +96,16 @@ Authorization: Bearer <accessToken>
     "totalPages": 1
   },
   "timestamp": "2026-09-16T09:15:30.123456Z"
+}
+```
+
+#### Response Example (`400 Bad Request` - `page`/`size` không hợp lệ):
+```json
+{
+  "success": false,
+  "code": "COMMON_002",
+  "message": "page must be >= 1",
+  "timestamp": "2026-09-16T09:15:45.000000Z"
 }
 ```
 
@@ -323,8 +333,9 @@ Authorization: Bearer <accessToken của user role ADMIN>
 | Error Code | HTTP Status | Mô tả |
 |---|---|---|
 | `COMMON_001` | `400 Bad Request` | Validation thất bại trên request body (`@NotBlank`/`@Size`/`@Email`/`@Pattern`), hoặc trùng `username`/`email` phát hiện được ở tầng Service trước khi ghi CSDL. |
+| `COMMON_002` | `400 Bad Request` | Tham số query không hợp lệ - hiện chỉ áp dụng cho `page`/`size` của `GET /public/user/page` (mục 3.1). |
 | `COMMON_005` | `404 Not Found` | Không tìm thấy user với `id` được yêu cầu (`getById`/`update`/`delete`). |
 | `COMMON_006` | `409 Conflict` | Trùng `username`/`email` phát hiện muộn ở tầng CSDL (race condition giữa lúc kiểm tra và lúc ghi - `DataIntegrityViolationException`). |
-| `COMMON_999` | `500 Internal Error` | Lỗi máy chủ chưa được xử lý riêng - bao gồm cả trường hợp `page`/`size` không hợp lệ ở mục 3.1 (giới hạn đã biết, chưa map về 400). |
+| `COMMON_999` | `500 Internal Error` | Lỗi máy chủ chưa được xử lý riêng. |
 
 > **Quan trọng**: `401 Unauthorized` (thiếu/token sai/hết hạn) và `403 Forbidden` (token hợp lệ nhưng sai role) **không** đi qua `ApiResponse` ở trên - hai lỗi này bị Spring Security chặn ngay tại filter chain, **trước khi** request tới được Controller/`GlobalExceptionHandler`, nên response body theo mặc định của Spring Security/Spring Boot (không đảm bảo đúng cấu trúc `ApiResponse`), không phải mã `COMMON_003`/`COMMON_004` trong `CommonErrorCode`. Hai mã đó trong code hiện chỉ được dùng cho `POST /public/auth/login` khi sai username/password (`COMMON_003`), không dùng cho module này.

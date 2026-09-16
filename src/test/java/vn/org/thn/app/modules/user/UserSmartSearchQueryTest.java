@@ -32,12 +32,17 @@ class UserSmartSearchQueryTest {
         userEntityInfo = EntityCache.get(UserEntity.class);
     }
 
-    /** Mirrors the exact nested and/or expression in UserService#getUsersPaged. */
+    /**
+     * Mirrors the exact nested and/or expression in UserService#getUsersPaged - in particular
+     * {@code orLike} (substring match), not {@code orEq} (exact match), on email; an earlier
+     * version of this test used {@code orEq} here, silently drifting from the real query it claimed
+     * to mirror (caught 2026-09-16 while writing docs/USER_API_GUIDE.md against the real code).
+     */
     private QueryBuilder<UserEntity> smartSearch(String keyword) {
         QueryBuilder<UserEntity> query = new QueryBuilder<>(UserEntity.class, userEntityInfo, queryExecutor);
         query.and(sub -> sub
                 .like(UserEntity::getUsername, keyword)
-                .orEq(UserEntity::getEmail, keyword)
+                .orLike(UserEntity::getEmail, keyword)
                 .or(nameSub -> nameSub.likeAnyOrderUnaccent(UserEntity::getFullNameUnaccent, keyword))
         );
         return query;
@@ -62,7 +67,7 @@ class UserSmartSearchQueryTest {
 
         String sql = query.toSql();
         assertTrue(sql.contains("username LIKE #{"));
-        assertTrue(sql.contains("OR email = #{"));
+        assertTrue(sql.contains("OR email LIKE #{"));
         assertTrue(sql.contains("OR (full_name_unaccent LIKE #{"),
                 "the nested likeAnyOrderUnaccent group must fold in as one OR-joined parenthesized fragment");
     }

@@ -31,7 +31,24 @@ public class UserService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    /**
+     * Validated here rather than left to {@code QueryBuilder#page}'s own {@link
+     * IllegalArgumentException} guard: that exception has no dedicated mapping in
+     * {@code GlobalExceptionHandler} (it falls through to the generic 500 handler), which turned an
+     * invalid {@code page}/{@code size} query param on {@code GET /public/user/page} into an opaque
+     * server error instead of a clear 400 (found 2026-09-16 while writing docs/USER_API_GUIDE.md
+     * against the real behavior). Throwing {@link BusinessException} here instead routes through
+     * the same, already-tested {@code BaseException} handler every other validation failure in this
+     * service uses.
+     */
     public PageResponse<UserResponse> getUsersPaged(int page, int size, String keyword, String status) {
+        if (page <= 0) {
+            throw new BusinessException(CommonErrorCode.INVALID_PARAMETER, "page must be >= 1");
+        }
+        if (size <= 0) {
+            throw new BusinessException(CommonErrorCode.INVALID_PARAMETER, "size must be >= 1");
+        }
+
         var query = userRepository.query();
 
         if (status != null && !status.isBlank()) {

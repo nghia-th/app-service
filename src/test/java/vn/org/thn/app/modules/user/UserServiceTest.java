@@ -8,6 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import vn.org.thn.app.base.core.exception.BusinessException;
+import vn.org.thn.app.base.core.exception.CommonErrorCode;
 import vn.org.thn.app.modules.user.api.dto.UserCreateRequest;
 import vn.org.thn.app.modules.user.api.dto.UserResponse;
 import vn.org.thn.app.modules.user.api.dto.UserUpdateRequest;
@@ -121,5 +122,30 @@ class UserServiceTest {
         assertThrows(BusinessException.class, () -> userService.updateUser(1L, request));
 
         verify(userRepository, never()).save(any());
+    }
+
+    // --- Regression test (2026-09-16): GET /public/user/page?page=0 (or a negative/zero size) used
+    // to reach QueryBuilder#page's own IllegalArgumentException guard, which GlobalExceptionHandler
+    // has no dedicated mapping for - it fell through to the generic 500 handler instead of a clean
+    // 400. Rejecting it here instead routes through the already-tested BaseException handler. ---
+
+    @Test
+    @DisplayName("Should throw BusinessException(INVALID_PARAMETER) for page <= 0, instead of reaching QueryBuilder")
+    void getUsersPaged_nonPositivePage_throwsBusinessException() {
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> userService.getUsersPaged(0, 20, null, null));
+
+        assertEquals(CommonErrorCode.INVALID_PARAMETER, ex.getErrorCode());
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    @DisplayName("Should throw BusinessException(INVALID_PARAMETER) for size <= 0, instead of reaching QueryBuilder")
+    void getUsersPaged_nonPositiveSize_throwsBusinessException() {
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> userService.getUsersPaged(1, -5, null, null));
+
+        assertEquals(CommonErrorCode.INVALID_PARAMETER, ex.getErrorCode());
+        verifyNoInteractions(userRepository);
     }
 }
