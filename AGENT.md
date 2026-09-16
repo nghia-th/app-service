@@ -134,7 +134,8 @@ Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **b�
 ├── docs/                                  # TẤT CẢ TÀI LIỆU QUY CHUẨN CỦA DỰ ÁN
 │   ├── BASE_FRAMEWORK_GUIDE.md            # Hướng dẫn chi tiết Base ORM, QueryBuilder, Controller, i18n
 │   ├── MICROSERVICE_ARCHITECTURE_GUIDE.md # Quy chuẩn cấu trúc Microservice 4 tầng Clean Architecture
-│   └── LANGUAGE_API_GUIDE.md              # Tài liệu API quản lý đa ngôn ngữ
+│   ├── LANGUAGE_API_GUIDE.md              # Tài liệu API quản lý đa ngôn ngữ
+│   └── USER_API_GUIDE.md                  # Tài liệu API module User (mẫu cho Điều 11 - mỗi module mới có 1 file riêng)
 │
 ├── config/                                # Cấu hình môi trường bên ngoài
 │   ├── secrets.yaml                       # Chứa username/password CSDL thật (gitignored)
