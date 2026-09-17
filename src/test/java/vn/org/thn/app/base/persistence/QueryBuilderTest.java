@@ -13,6 +13,8 @@ import vn.org.thn.app.base.persistence.query.UpdateBuilder;
 import vn.org.thn.app.base.persistence.query.DeleteBuilder;
 
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -273,5 +275,62 @@ class QueryBuilderTest {
         builder.eq("lang_key", "welcome");
 
         assertTrue(builder.toSql().contains("WHERE lang_key = #{"));
+    }
+
+    // --- Medium finding (2026-09-17 review): in()/notIn()/orIn() used to build one IN clause with
+    // one placeholder per value, no matter how large the collection - a caller filtering by a large
+    // collection (e.g. a few thousand ids) could blow past an engine's hard limit on a single IN
+    // list (Oracle's ORA-01795: max 1000 expressions) or its total bound-parameter cap per statement
+    // (SQL Server's ~2100), turning into a runtime database error instead of a working query. ---
+
+    @Test
+    @DisplayName("in() chunks a collection bigger than MAX_IN_CLAUSE_SIZE into multiple OR-joined IN clauses")
+    void in_largeCollection_chunksIntoMultipleOrJoinedInClauses() {
+        List<String> manyKeys = IntStream.range(0, 1500).mapToObj(i -> "key" + i).collect(Collectors.toList());
+        QueryBuilder<Translate> builder = new QueryBuilder<>(Translate.class, translateEntityInfo, queryExecutor);
+        builder.in(Translate::getLangKey, manyKeys);
+
+        String sql = builder.toSql();
+        assertTrue(sql.contains("WHERE (lang_key IN ("), "the chunked clauses must be wrapped in parens: " + sql);
+        assertTrue(sql.contains(") OR lang_key IN ("), "1500 values with a 1000-per-clause limit must split into OR-joined chunks: " + sql);
+        assertEquals(1500, builder.getParams().size(), "every value must still get its own bind parameter across all chunks");
+    }
+
+    @Test
+    @DisplayName("notIn() chunks a collection bigger than MAX_IN_CLAUSE_SIZE into multiple AND-joined NOT IN clauses (De Morgan's law)")
+    void notIn_largeCollection_chunksIntoMultipleAndJoinedNotInClauses() {
+        List<String> manyKeys = IntStream.range(0, 1500).mapToObj(i -> "key" + i).collect(Collectors.toList());
+        QueryBuilder<Translate> builder = new QueryBuilder<>(Translate.class, translateEntityInfo, queryExecutor);
+        builder.notIn(Translate::getLangKey, manyKeys);
+
+        String sql = builder.toSql();
+        assertTrue(sql.contains("WHERE (lang_key NOT IN ("), "the chunked clauses must be wrapped in parens: " + sql);
+        assertTrue(sql.contains(") AND lang_key NOT IN ("), "excluding the full set must AND-join the negated chunks: " + sql);
+        assertEquals(1500, builder.getParams().size());
+    }
+
+    @Test
+    @DisplayName("orIn() chunks the same way as in(), OR-joined with previous conditions as well as internally")
+    void orIn_largeCollection_chunksIntoMultipleOrJoinedInClauses() {
+        List<String> manyKeys = IntStream.range(0, 1500).mapToObj(i -> "key" + i).collect(Collectors.toList());
+        QueryBuilder<Translate> builder = new QueryBuilder<>(Translate.class, translateEntityInfo, queryExecutor);
+        builder.eq(Translate::getLang, "vi").orIn(Translate::getLangKey, manyKeys);
+
+        String sql = builder.toSql();
+        assertTrue(sql.contains("OR (lang_key IN ("), "the whole chunked group must fold in as one OR-joined fragment: " + sql);
+        assertTrue(sql.contains(") OR lang_key IN ("), "the chunks within the group must themselves be OR-joined: " + sql);
+    }
+
+    @Test
+    @DisplayName("in() with exactly MAX_IN_CLAUSE_SIZE values stays a single, unparenthesized IN clause (boundary case)")
+    void in_exactlyAtLimit_rendersSingleInClause() {
+        List<String> exactlyAtLimit = IntStream.range(0, 1000).mapToObj(i -> "key" + i).collect(Collectors.toList());
+        QueryBuilder<Translate> builder = new QueryBuilder<>(Translate.class, translateEntityInfo, queryExecutor);
+        builder.in(Translate::getLangKey, exactlyAtLimit);
+
+        String sql = builder.toSql();
+        assertTrue(sql.contains("WHERE lang_key IN (#{"), "exactly at the limit must render as before, with no wrapping parens: " + sql);
+        assertFalse(sql.contains("WHERE ("), "must not trigger chunking when exactly at the limit: " + sql);
+        assertEquals(1000, builder.getParams().size());
     }
 }

@@ -45,6 +45,22 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
      */
     private static final char LIKE_ESCAPE_CHAR = '!';
 
+    /**
+     * Max number of values a single {@code IN}/{@code NOT IN} clause is allowed to hold before
+     * {@link #buildInClause} splits it into multiple {@code OR}/{@code AND}-joined IN clauses
+     * instead - without this, a caller filtering by a large collection (e.g. a few thousand ids)
+     * could blow past an engine's own hard limit on a single IN list (Oracle's
+     * {@code ORA-01795: maximum number of expressions in a list is 1000}) or its total
+     * bound-parameter cap per statement (SQL Server's ~2100), turning into a runtime database error
+     * instead of a working query (Medium finding, 2026-09-17 review). 1000 matches Oracle's hard
+     * limit exactly and is comfortably under every other supported engine's own cap (SQL Server's
+     * ~2100 total parameters per statement, SQLite's own historical per-statement host-parameter
+     * default) - one conservative, dialect-independent number is simpler to reason about than
+     * tuning five different limits for a purely defensive guard that every dialect can equally
+     * afford to be a little more cautious about.
+     */
+    private static final int MAX_IN_CLAUSE_SIZE = 1000;
+
     protected final Class<T> clazz;
     protected final EntityInfo info;
     protected final QueryExecutor queryExecutor;
@@ -342,16 +358,15 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
         return likeAnyOrderUnaccent(fieldName(field), keyword);
     }
 
-    /** Adds a {@code field IN (...)} condition (AND-joined), one bind parameter per value. No-op if {@code values} is null/empty. */
+    /**
+     * Adds a {@code field IN (...)} condition (AND-joined), one bind parameter per value - chunked
+     * across multiple {@code OR}-joined {@code IN} clauses if {@code values} is larger than
+     * {@link #MAX_IN_CLAUSE_SIZE} (see {@link #buildInClause} for why). No-op if {@code values} is
+     * null/empty.
+     */
     public SELF in(String field, Collection<?> values) {
         if (values == null || values.isEmpty()) return self();
-        List<String> placeholders = new ArrayList<>();
-        for (Object v : values) {
-            String key = nextParam();
-            params.put(key, v);
-            placeholders.add("#{" + key + "}");
-        }
-        whereClauses.add(new QueryCondition(column(field) + " IN (" + String.join(",", placeholders) + ")", QueryLogic.AND));
+        whereClauses.add(new QueryCondition(buildInClause(column(field), values, false), QueryLogic.AND));
         return self();
     }
 
@@ -360,16 +375,15 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
         return in(fieldName(field), values);
     }
 
-    /** Adds a {@code field NOT IN (...)} condition (AND-joined), one bind parameter per value. No-op if {@code values} is null/empty. */
+    /**
+     * Adds a {@code field NOT IN (...)} condition (AND-joined), one bind parameter per value -
+     * chunked across multiple {@code AND}-joined {@code NOT IN} clauses if {@code values} exceeds
+     * {@link #MAX_IN_CLAUSE_SIZE} (see {@link #buildInClause}: excluding the full set is equivalent
+     * to excluding each chunk in turn, by De Morgan's law). No-op if {@code values} is null/empty.
+     */
     public SELF notIn(String field, Collection<?> values) {
         if (values == null || values.isEmpty()) return self();
-        List<String> placeholders = new ArrayList<>();
-        for (Object v : values) {
-            String key = nextParam();
-            params.put(key, v);
-            placeholders.add("#{" + key + "}");
-        }
-        whereClauses.add(new QueryCondition(column(field) + " NOT IN (" + String.join(",", placeholders) + ")", QueryLogic.AND));
+        whereClauses.add(new QueryCondition(buildInClause(column(field), values, true), QueryLogic.AND));
         return self();
     }
 
@@ -472,22 +486,55 @@ public abstract class BaseConditionBuilder<T, SELF extends BaseConditionBuilder<
         return orEndsWith(fieldName(field), value);
     }
 
-    /** Adds a {@code field IN (...)} condition, OR-joined with previous conditions. No-op if {@code values} is null/empty. */
+    /**
+     * Adds a {@code field IN (...)} condition, OR-joined with previous conditions - chunked the same
+     * way as {@link #in(String, Collection)} if {@code values} exceeds {@link #MAX_IN_CLAUSE_SIZE}.
+     * No-op if {@code values} is null/empty.
+     */
     public SELF orIn(String field, Collection<?> values) {
         if (values == null || values.isEmpty()) return self();
-        List<String> placeholders = new ArrayList<>();
-        for (Object v : values) {
-            String key = nextParam();
-            params.put(key, v);
-            placeholders.add("#{" + key + "}");
-        }
-        whereClauses.add(new QueryCondition(column(field) + " IN (" + String.join(",", placeholders) + ")", QueryLogic.OR));
+        whereClauses.add(new QueryCondition(buildInClause(column(field), values, false), QueryLogic.OR));
         return self();
     }
 
     /** {@link #orIn(String, Collection)} with the field named via a method reference instead of a string. */
     public <R> SELF orIn(SFunction<T, R> field, Collection<R> values) {
         return orIn(fieldName(field), values);
+    }
+
+    /**
+     * Builds a {@code col IN (...)} or {@code col NOT IN (...)} fragment, splitting {@code values}
+     * into multiple {@link #MAX_IN_CLAUSE_SIZE}-sized chunks joined by {@code OR} ({@code IN}) or
+     * {@code AND} ({@code NOT IN}, by De Morgan's law) when it's larger than that - see
+     * {@link #in(String, Collection)}'s javadoc for why this exists. The single-chunk case (the
+     * overwhelming majority of calls) renders byte-for-byte the same as before this chunking was
+     * added: a single {@code col IN (#{p1},#{p2},...)}, no extra parentheses.
+     */
+    private String buildInClause(String col, Collection<?> values, boolean negated) {
+        String keyword = negated ? " NOT IN (" : " IN (";
+        List<Object> valueList = new ArrayList<>(values);
+
+        if (valueList.size() <= MAX_IN_CLAUSE_SIZE) {
+            return col + keyword + placeholdersFor(valueList) + ")";
+        }
+
+        List<String> chunks = new ArrayList<>();
+        for (int from = 0; from < valueList.size(); from += MAX_IN_CLAUSE_SIZE) {
+            List<Object> chunk = valueList.subList(from, Math.min(from + MAX_IN_CLAUSE_SIZE, valueList.size()));
+            chunks.add(col + keyword + placeholdersFor(chunk) + ")");
+        }
+        return "(" + String.join(negated ? " AND " : " OR ", chunks) + ")";
+    }
+
+    /** Mints one bind parameter per value in {@code values}, adds them to {@link #params}, and returns the comma-joined {@code #{key}} placeholder list. */
+    private String placeholdersFor(Collection<?> values) {
+        List<String> placeholders = new ArrayList<>();
+        for (Object v : values) {
+            String key = nextParam();
+            params.put(key, v);
+            placeholders.add("#{" + key + "}");
+        }
+        return String.join(",", placeholders);
     }
 
     /** Adds a raw, already-rendered SQL fragment as a WHERE condition (AND-joined), with no bind parameters. */
