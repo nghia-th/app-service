@@ -158,6 +158,10 @@ Product product = productRepository.query()
 | `orEndsWith(Field, val)` | `.orEndsWith(Product::getProductName, "Mini")` | `OR product_name LIKE '%Mini'` |
 | `orIn(Field, Collection)` | `.orIn(Product::getStatus, List.of("A", "B"))` | `OR status IN ('A', 'B')` |
 
+> **Danh sách lớn với `in`/`notIn`/`orIn`**: nếu truyền vào hơn 1000 phần tử, framework **tự động chia nhỏ** thành nhiều mệnh đề `IN`/`NOT IN` nối bằng `OR`/`AND` tương ứng (theo định luật De Morgan cho `NOT IN`), để không vượt giới hạn của từng CSDL (ví dụ Oracle chỉ cho tối đa 1000 phần tử/`IN` - lỗi `ORA-01795`). Không cần tự chia danh sách lớn trước khi gọi - cứ truyền nguyên `List`/`Set` vào như bình thường.
+
+> **Tên field không tồn tại (overload String)**: `eq("tenSai", value)`, `orderByAsc("tenSai")`... sẽ **ném `IllegalArgumentException` ngay lập tức** nếu `"tenSai"` không khớp field hoặc cột nào của entity, thay vì âm thầm dùng chuỗi đó làm tên cột (rủi ro SQL injection nếu chuỗi đến từ input người dùng). Đây là lý do Điều 3 của `AGENT.md` yêu cầu luôn ưu tiên Method Reference (`Entity::getField`) thay vì String cứng.
+
 #### c) Nhóm Điều Kiện Phức Tạp (`and`, `or`)
 ```java
 // WHERE status = 'ACTIVE' AND (price > 100 OR product_name LIKE '%Special%')
@@ -169,6 +173,8 @@ List<Product> list = productRepository.query()
     )
     .list();
 ```
+
+> ⚠️ **Thứ tự AND/OR khi không dùng `.and()/.or()`**: nếu trộn `eq()`/`orEq()` (và các biến thể `or*`) ngay ở top-level mà không bọc nhóm, framework đánh giá theo đúng **thứ tự trái sang phải bạn viết ra**, không theo precedence mặc định của SQL (nơi `AND` luôn được tính trước `OR`). Ví dụ `.eq(a, v1).orEq(b, v2).eq(c, v3)` render thành `(a = ? OR b = ?) AND c = ?` - đúng như đọc tuần tự chuỗi gọi, không phải `a = ? OR (b = ? AND c = ?)`. Một chuỗi thuần AND hoặc thuần OR thì không bị ảnh hưởng (không có gì mơ hồ để cần xử lý). Nếu muốn một cách nhóm khác hẳn, dùng `.and(sub -> ...)`/`.or(sub -> ...)` để nhóm tường minh như ví dụ trên.
 
 #### d) Phân Trang (`page`)
 ```java
