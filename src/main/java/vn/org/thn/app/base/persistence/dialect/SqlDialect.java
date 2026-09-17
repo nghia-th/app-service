@@ -21,7 +21,7 @@ public interface SqlDialect {
     /** Wraps {@code insertSql} as needed to allow inserting an explicit value into an identity column (e.g. SQL Server's {@code SET IDENTITY_INSERT ... ON/OFF}). Returns {@code insertSql} unchanged where no such wrapping is needed. */
     String buildIdentityInsert(String table, String insertSql);
 
-    /** Whether this engine supports the flattened multi-row {@code INSERT ... VALUES (...),(...),...} form used by {@code BatchExecutor}/{@code BatchInsertExecutor}. */
+    /** Whether this engine supports the flattened multi-row {@code INSERT ... VALUES (...),(...),...} form used by {@code BatchInsertExecutor}. */
     boolean supportBatchInsert();
 
     /** Whether this engine supports auto-generated identity columns at all. */

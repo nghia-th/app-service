@@ -21,7 +21,7 @@ import java.util.Map;
  * an identity column (needs a real INSERT-and-read-back per row to capture the generated key, so
  * there's no way around one statement per row there), otherwise builds flattened multi-row
  * {@code INSERT ... VALUES (...),(...),...} statements, chunked to the dialect's
- * {@link SqlDialect#maxBatchRows(int)} the same way {@link BatchExecutor} does.
+ * {@link SqlDialect#maxBatchRows(int)}.
  * <p>
  * The Kotlin original built the VALUES list with embedded {@code #{list[i].field}} placeholders
  * bound via MyBatis OGNL navigating straight into each entity's getters (works for Kotlin data
@@ -30,6 +30,13 @@ import java.util.Map;
  * flattening values into an explicit parameter map up front - same reflection metadata
  * ({@code EntityInfo#getFieldMap()}) the rest of the ORM already uses - and chunks large
  * collections to stay under each engine's bound-parameter limit.
+ * <p>
+ * An earlier, separate {@code BatchExecutor} class covered the same identity-less flattened-batch
+ * case with the same chunking, but with no {@code @Transactional}, no Auto-Audit
+ * ({@code BaseEntity.populateInsertAudit}), and no {@code @Unaccent} population - a duplicate,
+ * less-safe path that nothing in this codebase ever actually called (Medium finding, 2026-09-17
+ * review). Removed rather than fixed in place, since this class already covers everything it did,
+ * correctly.
  */
 @Component
 public class BatchInsertExecutor {
