@@ -90,7 +90,7 @@ Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **b�
 - **Ví dụ thực tế (2026-09-16)**: khi tách rule bảo mật `/public/user/**` ra khỏi `SecurityAutoConfiguration` (xem Điều 9), lượt sửa đầu chỉ cập nhật `AGENT.md` và `BASE_FRAMEWORK_GUIDE.md`, bỏ sót `MICROSERVICE_ARCHITECTURE_GUIDE.md` và `PROMPT_TEMPLATES.md` - khiến 2 tài liệu này tiếp tục dạy sai cách làm cho tới khi rà soát lại riêng.
 
 ### ⚡ Điều 11: Bắt Buộc Tạo Tài Liệu Riêng Cho Mỗi Module/Tính Năng Mới
-- Khi tạo mới một module nghiệp vụ (hoặc một tính năng lớn trong module có sẵn), AI Agent **bắt buộc** tạo file `docs/<TÊN_MODULE>_API_GUIDE.md`, theo đúng mẫu cấu trúc của `docs/LANGUAGE_API_GUIDE.md`:
+- Khi tạo mới một module nghiệp vụ (hoặc một tính năng lớn trong module có sẵn), AI Agent **bắt buộc** tạo file `docs/<ten_module>/<TÊN_MODULE>_API_GUIDE.md` (mỗi module một thư mục con riêng trong `docs/`, ví dụ `docs/user/USER_API_GUIDE.md`, `docs/order/ORDER_API_GUIDE.md`), theo đúng mẫu cấu trúc của `docs/LANGUAGE_API_GUIDE.md`:
   1. Tổng quan: Base URL, định dạng response, yêu cầu xác thực.
   2. Bảng danh sách toàn bộ endpoint (method, path, mô tả, yêu cầu role).
   3. Chi tiết từng endpoint: request/response example thật (JSON cụ thể, không phải placeholder mơ hồ).
@@ -120,7 +120,7 @@ Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **b�
 | Sửa trực tiếp `base.security.SecurityAutoConfiguration#securityFilterChain` để thêm rule cho module nghiệp vụ | Tạo `SecurityRuleCustomizer` riêng trong module đó (xem Điều 9). | Vi phạm Điều 2 (không sửa `base`); mỗi module mới không còn phải đụng vào core framework. |
 | Đọc thông tin user từ header client tự gửi (`X-User-Id`, `X-Username`...) cho audit log/phân quyền | Dùng `SecurityContextHolder.getContext().getAuthentication()` hoặc `RequestContextFilter.resolveUser(request)`. | Header client tự gửi không qua xác thực, dễ bị giả mạo (đây chính là Critical #2 đã bị vá 2026-09-13). |
 | Sửa 1 tài liệu rồi coi như xong, không rà các file docs khác | `grep` từ khóa liên quan trên toàn bộ `AGENT.md` + `docs/*.md` trước khi báo cáo hoàn tất (xem Điều 10). | Tài liệu tham chiếu chéo nhiều file - sót 1 chỗ là đủ để dạy sai quy ước ở lần sau. |
-| Tạo module mới xong mà không viết `docs/<Module>_API_GUIDE.md` (xem Điều 11) | Viết tài liệu API riêng cho module theo mẫu `LANGUAGE_API_GUIDE.md` ngay sau khi code chạy được. | Người đọc sau này (kể cả AI Agent khác) phải hiểu module mà không cần mở code hay chạy thử app. |
+| Tạo module mới xong mà không viết `docs/<ten_module>/<Module>_API_GUIDE.md` (xem Điều 11) | Viết tài liệu API riêng cho module trong thư mục con của chính module đó (ví dụ `docs/user/USER_API_GUIDE.md`), theo mẫu `LANGUAGE_API_GUIDE.md`, ngay sau khi code chạy được. | Người đọc sau này (kể cả AI Agent khác) phải hiểu module mà không cần mở code hay chạy thử app; tách thư mục theo module giúp `docs/` không rối khi số module tăng lên. |
 
 ---
 
@@ -134,8 +134,9 @@ Tất cả các AI Agent (Antigravity, Claude, ChatGPT, Cursor, Copilot...) **b�
 ├── docs/                                  # TẤT CẢ TÀI LIỆU QUY CHUẨN CỦA DỰ ÁN
 │   ├── BASE_FRAMEWORK_GUIDE.md            # Hướng dẫn chi tiết Base ORM, QueryBuilder, Controller, i18n
 │   ├── MICROSERVICE_ARCHITECTURE_GUIDE.md # Quy chuẩn cấu trúc Microservice 4 tầng Clean Architecture
-│   ├── LANGUAGE_API_GUIDE.md              # Tài liệu API quản lý đa ngôn ngữ
-│   └── USER_API_GUIDE.md                  # Tài liệu API module User (mẫu cho Điều 11 - mỗi module mới có 1 file riêng)
+│   ├── LANGUAGE_API_GUIDE.md              # Tài liệu API quản lý đa ngôn ngữ (thuộc base, không phải module riêng)
+│   └── user/                              # Tài liệu riêng của module User (xem Điều 11)
+│       └── USER_API_GUIDE.md              # Mẫu cho Điều 11 - mỗi module mới có 1 thư mục + file riêng: docs/<module>/<MODULE>_API_GUIDE.md
 │
 ├── config/                                # Cấu hình môi trường bên ngoài
 │   ├── secrets.yaml                       # Chứa username/password CSDL thật (gitignored)
